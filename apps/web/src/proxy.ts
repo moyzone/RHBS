@@ -13,6 +13,14 @@ export function proxy(req: NextRequest) {
     .replace(".localhost", "")
     .replace(".restopia.in", "");
 
+  console.log("Proxy executing:", {
+    originalUrl: req.url,
+    hostname,
+    domain,
+    currentHost,
+    pathname: url.pathname,
+  });
+
   // Bypass if it's the main domain or direct local access without a subdomain
   if (
     currentHost === "localhost" || 
