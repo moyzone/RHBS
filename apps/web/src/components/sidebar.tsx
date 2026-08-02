@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, CalendarDays, BedDouble, Users, CreditCard, Menu, X, UserCircle, Brush, Shield
@@ -69,7 +68,7 @@ export function Sidebar({ tenantId }: SidebarProps) {
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link
+              <a
                 key={item.name}
                 href={item.href}
                 className={cn(
@@ -81,7 +80,7 @@ export function Sidebar({ tenantId }: SidebarProps) {
               >
                 <item.icon className={cn("mr-3 h-5 w-5", isActive ? "text-white" : "text-zinc-500 group-hover:text-zinc-300")} />
                 {item.name}
-              </Link>
+              </a>
             )
           })}
         </nav>
