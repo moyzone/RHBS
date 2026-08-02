@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const url = req.nextUrl;
   
   // Get hostname of request and remove port
@@ -40,6 +40,8 @@ export function middleware(req: NextRequest) {
   url.pathname = `/${currentHost}${url.pathname}`;
   return NextResponse.rewrite(url);
 }
+
+export default proxy;
 
 export const config = {
   matcher: [
