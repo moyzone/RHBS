@@ -1,0 +1,13 @@
+{
+  "name": "@restopia/ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "lucide-react": "^0.474.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0"
+  }
+}

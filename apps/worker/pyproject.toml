@@ -1,0 +1,8 @@
+[project]
+name = "restopia-worker"
+version = "0.1.0"
+dependencies = [
+    "celery>=5.3.6",
+    "redis>=5.0.1",
+    "restopia-database",
+]
