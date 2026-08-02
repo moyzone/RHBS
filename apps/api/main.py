@@ -211,7 +211,7 @@ class AdminUserUpdate(BaseModel):
 
 # ---- REAL ENDPOINTS ----
 @app.post("/api/dev/token")
-def generate_mock_token(tenant_id: str = "hotelbarak"):
+def generate_mock_token(tenant_id: str = "hotelflora"):
     """
     Utility endpoint to fetch a valid JWT token during local non-DB dev.
     """
