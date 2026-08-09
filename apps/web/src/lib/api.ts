@@ -4,7 +4,7 @@ export const API_URL = `${BASE_URL}/api`;
 type TokenData = { token: string, tenant_id: string, theme_color: string };
 
 export function resolveTenantId(tenantId?: string): string {
-  if (tenantId && tenantId !== 'undefined') return tenantId;
+  if (tenantId && tenantId !== 'undefined' && tenantId !== 'admin') return tenantId;
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     const parts = hostname.split('.');

@@ -5,7 +5,7 @@ import jwt
 import json
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
-from fastapi import FastAPI, Depends, Request, HTTPException, File, UploadFile
+from fastapi import FastAPI, Depends, Request, HTTPException, File, UploadFile, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -107,17 +107,18 @@ class InvoiceCreate(BaseModel):
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
     customer_email: Optional[str] = None
-    subtotal: float
-    gst_percentage: float
-    gst_amount: float
-    total_amount: float
-    tax_amount: float
-    paid_amount: float = 0.0
-    balance_amount: float = 0.0
+    subtotal: Optional[float] = None
+    gst_percentage: Optional[float] = 12.0
+    gst_amount: Optional[float] = None
+    total_amount: Optional[float] = None
+    tax_amount: Optional[float] = None
+    paid_amount: Optional[float] = 0.0
+    balance_amount: Optional[float] = 0.0
     payment_mode: Optional[str] = None
     due_date: Optional[str] = None
     bill_notes: Optional[str] = None
-    items: List[dict] # Rich list of all 8 line types
+    items: Optional[List[dict]] = None
+    custom_subtotal: Optional[float] = None
 
 class StaffCreate(BaseModel):
     name: str
@@ -217,6 +218,59 @@ def generate_mock_token(tenant_id: str = "hotelflora"):
     """
     token = jwt.encode({"user_id": "u_test", "tenant_id": tenant_id}, JWT_SECRET, algorithm="HS256")
     return {"token": token, "tenant_id": tenant_id, "theme_color": "#0ea5e9"} # Sky blue theme mock
+
+@app.get("/api/dashboard/stats")
+def get_dashboard_stats(context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+    set_rls_context(db, context["tenant_id"])
+    
+    total_rooms = db.query(Room).count()
+    
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Bookings with check_in on or before today and check_out on or after today
+    checked_in_bookings = db.query(Booking).filter(
+        Booking.status == "Checked-in"
+    ).all()
+    
+    # Check-ins today
+    checkins_today = db.query(Booking).filter(
+        Booking.check_in >= today_start,
+        Booking.check_in <= today_end
+    ).count()
+
+    occupied_count = len(checked_in_bookings)
+    occupancy_rate = round((occupied_count / total_rooms * 100), 1) if total_rooms > 0 else 0.0
+    
+    # Active guests count
+    active_guests = occupied_count
+    
+    # Housekeeping summary
+    dirty_rooms = db.query(Room).filter(Room.housekeeping_status == "Dirty").count()
+    clean_rooms = db.query(Room).filter(Room.housekeeping_status == "Clean").count()
+    cleaning_rooms = db.query(Room).filter(Room.housekeeping_status == "Cleaning").count()
+    
+    # Total revenue today from payments
+    today_payments = db.query(Payment).filter(
+        Payment.timestamp >= today_start,
+        Payment.timestamp <= today_end
+    ).all()
+    today_revenue = sum(p.amount for p in today_payments)
+
+    total_bookings = db.query(Booking).count()
+
+    return {
+        "checkins_today": checkins_today,
+        "occupancy_rate": occupancy_rate,
+        "occupied_rooms": occupied_count,
+        "total_rooms": total_rooms,
+        "active_guests": active_guests,
+        "dirty_rooms": dirty_rooms,
+        "clean_rooms": clean_rooms,
+        "cleaning_rooms": cleaning_rooms,
+        "today_revenue": today_revenue,
+        "total_bookings": total_bookings
+    }
 
 @app.get("/api/room-types")
 def get_room_types(context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
@@ -443,7 +497,7 @@ def update_booking_status(booking_id: str, req: StatusUpdate, context: dict = De
     return booking
 
 @app.post("/api/bookings/{booking_id}/invoice")
-def generate_gst_invoice(booking_id: str, request: Optional[InvoiceCreate] = None, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def generate_gst_invoice(booking_id: str, req: Optional[InvoiceCreate] = Body(None), context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
@@ -453,19 +507,32 @@ def generate_gst_invoice(booking_id: str, request: Optional[InvoiceCreate] = Non
     
     # Handle line items if provided, otherwise fallback to subtotal or booking price
     line_items_data = []
-    if request and request.items:
-        line_items_data = [{"description": item.description, "amount": item.amount} for item in request.items]
-        subtotal = sum(item["amount"] for item in line_items_data)
+    if req and req.items:
+        for item in req.items:
+            if isinstance(item, dict):
+                desc = item.get("description") or item.get("name") or "Product/Service"
+                amt = float(item.get("amount", 0.0))
+            else:
+                desc = getattr(item, "description", "Product/Service")
+                amt = float(getattr(item, "amount", 0.0))
+            line_items_data.append({"description": desc, "amount": amt})
+        subtotal = float(req.subtotal) if (req and req.subtotal is not None) else sum(item["amount"] for item in line_items_data)
+    elif req and req.subtotal is not None:
+        subtotal = float(req.subtotal)
+        line_items_data = [{"description": "Accommodation Services", "amount": subtotal}]
+    elif req and req.custom_subtotal is not None:
+        subtotal = float(req.custom_subtotal)
+        line_items_data = [{"description": "Accommodation Services", "amount": subtotal}]
     else:
-        # Fallback for simple subtotal-only requests
-        subtotal = request.custom_subtotal if (request and request.custom_subtotal is not None) else booking.total_price
+        subtotal = float(booking.total_price)
         line_items_data = [{"description": "Accommodation Services", "amount": subtotal}]
 
-    bill_notes = request.bill_notes if request else None
+    bill_notes = req.bill_notes if req else None
 
-    rate = 18.0 if subtotal >= 7500 else 5.0
-    gst_amount = float(subtotal) * (rate / 100.0)
-    total = float(subtotal) + gst_amount
+    rate = float(req.gst_percentage) if (req and req.gst_percentage is not None) else (18.0 if subtotal >= 7500 else 5.0)
+    gst_amount = float(req.gst_amount) if (req and req.gst_amount is not None) else (float(subtotal) * (rate / 100.0))
+    total = float(req.total_amount) if (req and req.total_amount is not None) else (float(subtotal) + gst_amount)
+    tax = float(req.tax_amount) if (req and req.tax_amount is not None) else gst_amount
     
     inv = Invoice(
         id=f"inv_{uuid.uuid4().hex[:8]}",
@@ -475,6 +542,7 @@ def generate_gst_invoice(booking_id: str, request: Optional[InvoiceCreate] = Non
         gst_percentage=rate,
         gst_amount=gst_amount,
         total_amount=total,
+        tax_amount=tax,
         bill_notes=bill_notes,
         line_items=json.dumps(line_items_data)
     )
@@ -519,6 +587,13 @@ def create_universal_invoice(req: InvoiceCreate, context: dict = Depends(get_use
     try:
         set_rls_context(db, context["tenant_id"])
         
+        items_list = req.items or []
+        calculated_subtotal = req.subtotal if req.subtotal is not None else sum(float(item.get("amount", 0.0)) for item in items_list if isinstance(item, dict))
+        calculated_gst_pct = req.gst_percentage if req.gst_percentage is not None else 12.0
+        calculated_gst_amt = req.gst_amount if req.gst_amount is not None else (calculated_subtotal * calculated_gst_pct / 100.0)
+        calculated_total = req.total_amount if req.total_amount is not None else (calculated_subtotal + calculated_gst_amt)
+        calculated_tax = req.tax_amount if req.tax_amount is not None else calculated_gst_amt
+
         new_invoice = Invoice(
             id=f"inv_{uuid.uuid4().hex[:8]}",
             tenant_id=context["tenant_id"],
@@ -526,17 +601,17 @@ def create_universal_invoice(req: InvoiceCreate, context: dict = Depends(get_use
             customer_name=req.customer_name,
             customer_contact=req.customer_contact,
             customer_email=req.customer_email,
-            subtotal=req.subtotal,
-            gst_percentage=req.gst_percentage,
-            gst_amount=req.gst_amount,
-            total_amount=req.total_amount,
-            tax_amount=req.tax_amount,
-            paid_amount=req.paid_amount,
-            balance_amount=req.balance_amount,
+            subtotal=calculated_subtotal,
+            gst_percentage=calculated_gst_pct,
+            gst_amount=calculated_gst_amt,
+            total_amount=calculated_total,
+            tax_amount=calculated_tax,
+            paid_amount=req.paid_amount if req.paid_amount is not None else 0.0,
+            balance_amount=req.balance_amount if req.balance_amount is not None else 0.0,
             payment_mode=req.payment_mode,
             due_date=datetime.fromisoformat(req.due_date.replace("Z", "+00:00")) if req.due_date else None,
             bill_notes=req.bill_notes,
-            line_items=json.dumps(req.items)
+            line_items=json.dumps(items_list)
         )
         db.add(new_invoice)
         db.commit()
