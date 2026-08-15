@@ -4,7 +4,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
 import { useParams } from 'next/navigation';
-import { 
+import {
   Users, BedDouble, Calendar, CreditCard, Brush, TrendingUp, Clock, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
@@ -37,19 +37,19 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-1 capitalize">{tenant} Dashboard</h1>
-          <p className="text-zinc-500">Live operational overview & revenue statistics.</p>
+          <p className="text-zinc-500">Live operational overview & revenue statistics</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <Link 
-            href={`/${tenant}/admin/calendar`} 
+          <Link
+            href={`/${tenant}/admin/calendar`}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--theme-color,#4f46e5)] text-white text-sm font-medium rounded-lg shadow hover:opacity-90 transition-opacity"
           >
             <Calendar className="w-4 h-4" />
             Master Calendar
           </Link>
-          <Link 
-            href={`/${tenant}/admin/rooms`} 
+          <Link
+            href={`/${tenant}/admin/rooms`}
             className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-medium rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
           >
             <BedDouble className="w-4 h-4" />
@@ -124,7 +124,7 @@ export default function DashboardPage() {
               View All
             </Link>
           </div>
-          
+
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
               <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
@@ -132,7 +132,7 @@ export default function DashboardPage() {
               </span>
               <span className="font-bold">{stats?.clean_rooms ?? 0}</span>
             </div>
-            
+
             <div className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
               <span className="flex items-center gap-2 text-sm text-rose-600 dark:text-rose-400 font-medium">
                 <AlertTriangle className="w-4 h-4" /> Needs Cleaning (Dirty)
