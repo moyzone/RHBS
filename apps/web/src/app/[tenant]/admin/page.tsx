@@ -89,7 +89,7 @@ export default function DashboardPage() {
 
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">Active Guests</p>
+            <p className="text-sm font-medium text-zinc-500 mb-1">Current Active Guests</p>
             <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
               {isLoading ? '...' : stats?.active_guests ?? 0}
             </p>
