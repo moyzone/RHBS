@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, CalendarDays, BedDouble, Users, CreditCard, Menu, X, UserCircle, Brush, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+import { resolveTenantId } from '@/lib/api';
 
 interface SidebarProps {
   tenantId: string;
@@ -15,8 +16,9 @@ interface SidebarProps {
 export function Sidebar({ tenantId }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const activeTenantId = resolveTenantId(tenantId);
 
-  const basePath = pathname.startsWith(`/${tenantId}`) ? `/${tenantId}` : '';
+  const basePath = pathname.startsWith(`/${activeTenantId}`) ? `/${activeTenantId}` : '';
   
   const navigation = [
     { name: 'Dashboard', href: `${basePath}/admin`, icon: Home },
@@ -54,10 +56,10 @@ export function Sidebar({ tenantId }: SidebarProps) {
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold bg-[var(--theme-color,#4f46e5)]">
-              {tenantId.charAt(0).toUpperCase()}
+              {activeTenantId.charAt(0).toUpperCase()}
             </div>
             <span className="font-bold text-white uppercase tracking-wider text-base">
-              {tenantId}
+              {activeTenantId}
             </span>
           </div>
           <button className="md:hidden" onClick={closeSidebar}>
@@ -69,7 +71,7 @@ export function Sidebar({ tenantId }: SidebarProps) {
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link
+              <a
                 key={item.name}
                 href={item.href}
                 className={cn(
@@ -81,7 +83,7 @@ export function Sidebar({ tenantId }: SidebarProps) {
               >
                 <item.icon className={cn("mr-3 h-5 w-5", isActive ? "text-white" : "text-zinc-500 group-hover:text-zinc-300")} />
                 {item.name}
-              </Link>
+              </a>
             )
           })}
         </nav>

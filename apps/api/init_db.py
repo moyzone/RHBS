@@ -57,11 +57,11 @@ def initialize_database():
             
         conn.commit()
 
-    print("Seeding dummy data for 'hotelbarak' and 'demo'...")
+    print("Seeding dummy data for 'hotelflora' and 'demo'...")
     with Session(engine) as session:
         # Tenants to seed
         tenants = [
-            {"id": "hotelbarak", "name": "Hotel Barak", "color": "#4f46e5"},
+            {"id": "hotelflora", "name": "Hotel Flora", "color": "#4f46e5"},
             {"id": "demo", "name": "Demo Hotel", "color": "#0ea5e9"}
         ]
         

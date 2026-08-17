@@ -1,45 +1,57 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(req: NextRequest) {
-  const url = req.nextUrl;
+export function proxy(req: NextRequest) {
+  const url = req.nextUrl.clone();
   
-  // Get hostname of request and remove port
+  // Pass through Next.js internal files, static assets, and API endpoints
+  if (
+    url.pathname.startsWith('/_next') || 
+    url.pathname.startsWith('/api') ||
+    url.pathname.includes('.')
+  ) {
+    return NextResponse.next();
+  }
+
+  // Extract hostname without port
   const hostname = req.headers.get("host") || "";
   const domain = hostname.split(':')[0];
 
-  // Extract the potential subdomain
-  let currentHost = domain
+  // Extract potential tenant subdomain
+  const currentHost = domain
     .replace(".localhost", "")
     .replace(".restopia.in", "");
 
-  // Bypass if it's the main domain or direct local access without a subdomain
+  // Direct localhost or base domain access
   if (
     currentHost === "localhost" || 
     currentHost === "127.0.0.1" || 
     currentHost === "restopia.in"
   ) {
+    if (url.pathname === "/") {
+      return NextResponse.redirect(new URL("/hotelflora/admin", req.url));
+    }
+    if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
+      const targetPath = url.pathname.replace(/^\/admin/, "/hotelflora/admin");
+      return NextResponse.redirect(new URL(targetPath, req.url));
+    }
     return NextResponse.next();
   }
 
-  // Bypass internal Next.js requests and API routes
-  if (
-    url.pathname.startsWith('/_next') || 
-    url.pathname.startsWith('/api') ||
-    url.pathname.includes('.') // Skip files with extensions
-  ) {
-    return NextResponse.next();
-  }
-
-  // Rewrite request mapping subdomain to [tenant] segment
-  // If the path already has the tenant prefix, don't add it again
+  // If the pathname already starts with the tenant subdomain path (e.g. /hotelflora/admin/rooms),
+  // pass through to avoid infinite rewrite loops
   if (url.pathname.startsWith(`/${currentHost}`)) {
     return NextResponse.next();
   }
 
-  url.pathname = `/${currentHost}${url.pathname}`;
+  // Construct target URL mapping subdomain -> [tenant] path (e.g. hotelflora.localhost/admin/rooms -> /hotelflora/admin/rooms)
+  const targetPath = `/${currentHost}${url.pathname}`;
+  url.pathname = targetPath;
+
   return NextResponse.rewrite(url);
 }
+
+export default proxy;
 
 export const config = {
   matcher: [

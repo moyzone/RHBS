@@ -3,16 +3,29 @@ export const API_URL = `${BASE_URL}/api`;
 
 type TokenData = { token: string, tenant_id: string, theme_color: string };
 
+export function resolveTenantId(tenantId?: string): string {
+  if (tenantId && tenantId !== 'undefined' && tenantId !== 'admin') return tenantId;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+    if (parts.length > 1 && parts[0] !== 'localhost' && parts[0] !== '127' && parts[0] !== 'www') {
+      return parts[0];
+    }
+  }
+  return 'hotelflora';
+}
+
 // Fetch a quick mock dev token and cache it
-let devToken: string | null = null;
+let devTokenMap: Record<string, string> = {};
 export async function getDevToken(tenantId: string): Promise<string> {
-  if (devToken) return devToken;
+  const activeTenantId = resolveTenantId(tenantId);
+  if (devTokenMap[activeTenantId]) return devTokenMap[activeTenantId];
   try {
-    const res = await fetch(`${API_URL}/dev/token?tenant_id=${tenantId}`, {
+    const res = await fetch(`${API_URL}/dev/token?tenant_id=${activeTenantId}`, {
       method: 'POST'
     });
     const data: TokenData = await res.json();
-    devToken = data.token;
+    devTokenMap[activeTenantId] = data.token;
     return data.token;
   } catch (err) {
     console.error("Failed to fetch dev token", err);
@@ -21,7 +34,8 @@ export async function getDevToken(tenantId: string): Promise<string> {
 }
 
 export async function fetchApi<T>(tenantId: string, endpoint: string, options?: RequestInit): Promise<T> {
-  const token = await getDevToken(tenantId);
+  const activeTenantId = resolveTenantId(tenantId);
+  const token = await getDevToken(activeTenantId);
   const headers = new Headers(options?.headers);
   headers.set('Authorization', `Bearer ${token}`);
   if (!(options?.body instanceof FormData) && !headers.has('Content-Type') && options?.body) {

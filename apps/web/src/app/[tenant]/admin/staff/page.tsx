@@ -23,7 +23,8 @@ export default function StaffPage() {
     email: '',
     phone: '',
     role: 'Housekeeping',
-    designation: ''
+    designation: '',
+    status: 'Active'
   });
 
   const { data: staffList = [], isLoading } = useQuery({
@@ -56,7 +57,7 @@ export default function StaffPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: '', email: '', phone: '', role: 'Housekeeping', designation: '' });
+    setFormData({ name: '', email: '', phone: '', role: 'Housekeeping', designation: '', status: 'Active' });
     setEditingStaff(null);
   };
 
@@ -76,7 +77,8 @@ export default function StaffPage() {
       email: staff.email || '',
       phone: staff.phone || '',
       role: staff.role,
-      designation: staff.designation || ''
+      designation: staff.designation || '',
+      status: staff.status || 'Active'
     });
     setIsModalOpen(true);
   };
