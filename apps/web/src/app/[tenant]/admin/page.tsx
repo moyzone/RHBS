@@ -150,7 +150,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="md:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="font-semibold text-lg">Quick Property Actions</h3>
+          <h3 className="font-semibold text-lg">Quick Action</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Link href={`/${tenant}/admin/calendar`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
               <Calendar className="w-6 h-6 text-zinc-500 group-hover:text-[var(--theme-color,#4f46e5)] mb-2" />
