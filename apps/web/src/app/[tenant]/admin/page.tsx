@@ -60,53 +60,62 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">Check-ins Today</p>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-start justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-zinc-500">Check-ins Today</p>
+            <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               {isLoading ? '...' : stats?.checkins_today ?? 0}
             </p>
+            <p className="text-xs text-zinc-500 pt-1">
+              Expected today
+            </p>
           </div>
-          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-[var(--theme-color,#4f46e5)] rounded-lg">
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-[var(--theme-color,#4f46e5)] rounded-lg shrink-0">
             <Clock className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">Occupancy Rate</p>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-start justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-zinc-500">Occupancy Rate</p>
+            <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               {isLoading ? '...' : `${stats?.occupancy_rate ?? 0}%`}
             </p>
-            <p className="text-xs text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 pt-1">
               {stats?.occupied_rooms ?? 0} / {stats?.total_rooms ?? 0} Rooms Occupied
             </p>
           </div>
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-lg">
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-lg shrink-0">
             <TrendingUp className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">Active Guests</p>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-start justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-zinc-500">Active Guests</p>
+            <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               {isLoading ? '...' : stats?.active_guests ?? 0}
             </p>
+            <p className="text-xs text-zinc-500 pt-1">
+              Currently in-house
+            </p>
           </div>
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-lg">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-lg shrink-0">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-zinc-500 mb-1">Today's Revenue</p>
-            <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex items-start justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-zinc-500">Today's Revenue</p>
+            <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">
               {isLoading ? '...' : `₹${(stats?.today_revenue ?? 0).toLocaleString('en-IN')}`}
             </p>
+            <p className="text-xs text-zinc-500 pt-1">
+              Collected today
+            </p>
           </div>
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-lg">
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-lg shrink-0">
             <CreditCard className="w-6 h-6" />
           </div>
         </div>
