@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-const STATUS_OPTIONS = [
+const ALL_STATUS_OPTIONS = [
   'All', 
   'Room Available',
   'Booked',
@@ -37,9 +37,9 @@ const NON_ACTIONABLE_STATUSES = new Set([
   'Reserved'
 ]);
 
-const ACTIONABLE_STATUS_OPTIONS = STATUS_OPTIONS.filter(
-  s => s !== 'All' && !NON_ACTIONABLE_STATUSES.has(s)
-);
+const STATUS_OPTIONS = ALL_STATUS_OPTIONS.filter(s => !NON_ACTIONABLE_STATUSES.has(s));
+
+const ACTIONABLE_STATUS_OPTIONS = STATUS_OPTIONS.filter(s => s !== 'All');
 
 const STATUS_MEANINGS: Record<string, string> = {
   'Room Available': 'Room is available now',

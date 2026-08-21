@@ -442,7 +442,7 @@ export default function CalendarPage() {
           
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
-            {['All', 'Room Available', 'Booked', 'Not Ready', 'Vacant Ready', 'On queue', 'Occupied', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Reserved', 'Maintenance'].map(status => {
+            {['All', 'Room Available', 'Not Ready', 'Vacant Ready', 'On queue', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Maintenance'].map(status => {
               const count = status === 'All' 
                 ? rooms.length 
                 : rooms.filter((r: any) => (r.housekeeping_status || 'Room Available') === status).length;
@@ -450,15 +450,12 @@ export default function CalendarPage() {
               const colors: any = {
                 'All': 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800',
                 'Room Available': 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800',
-                'Booked': 'text-pink-600 bg-pink-50 dark:bg-pink-900/10',
                 'Not Ready': 'text-orange-500 bg-orange-50 dark:bg-orange-900/10',
                 'Vacant Ready': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/10',
                 'On queue': 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/10',
-                'Occupied': 'text-rose-500 bg-rose-50 dark:bg-rose-900/10',
                 'Do Not Disturb': 'text-amber-500 bg-amber-50 dark:bg-amber-900/10',
                 'Cleaning in progress': 'text-blue-500 bg-blue-50 dark:bg-blue-900/10',
                 'Sleep out': 'text-slate-600 bg-slate-100 dark:bg-slate-800/50',
-                'Reserved': 'text-red-700 bg-red-50 dark:bg-red-900/20',
                 'Maintenance': 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/10'
               };
 
