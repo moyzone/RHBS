@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-const STATUS_OPTIONS = [
+const ALL_STATUS_OPTIONS = [
   'All', 
   'Room Available',
   'Booked',
@@ -26,6 +26,20 @@ const STATUS_OPTIONS = [
   'Reserved',
   'Maintenance'
 ];
+
+const NON_ACTIONABLE_STATUSES = new Set([
+  'Booked',
+  'Occupied',
+  'checking out',
+  'Checking out',
+  'late checkout',
+  'Late checkout',
+  'Reserved'
+]);
+
+const STATUS_OPTIONS = ALL_STATUS_OPTIONS.filter(s => !NON_ACTIONABLE_STATUSES.has(s));
+
+const ACTIONABLE_STATUS_OPTIONS = STATUS_OPTIONS.filter(s => s !== 'All');
 
 const STATUS_MEANINGS: Record<string, string> = {
   'Room Available': 'Room is available now',
@@ -299,7 +313,7 @@ export default function HousekeepingPage() {
                   {typeRooms.map((room: any) => {
                     const status = getRoomEffectiveStatus(room);
                     const { color, icon: StatusIcon } = getStatusDetails(status);
-                    const isDynamicStatus = status === 'Occupied' || status === 'Booked';
+                    const isDynamicStatus = status === 'Occupied' || status === 'Booked' || status === 'checking out';
 
                     return (
                       <div 
@@ -325,7 +339,10 @@ export default function HousekeepingPage() {
                                  disabled={isDynamicStatus}
                                  onChange={(e) => updateHousekeeping.mutate({ id: room.id, status: e.target.value })}
                                >
-                                {STATUS_OPTIONS.filter(s => s !== 'All').map(opt => (
+                                {room.housekeeping_status && NON_ACTIONABLE_STATUSES.has(room.housekeeping_status) && (
+                                  <option value={room.housekeeping_status} disabled hidden>{room.housekeeping_status}</option>
+                                )}
+                                {ACTIONABLE_STATUS_OPTIONS.map(opt => (
                                   <option key={opt} value={opt}>{opt}</option>
                                 ))}
                               </select>
@@ -476,7 +493,7 @@ export default function HousekeepingPage() {
                                         const status = getRoomEffectiveStatus(room, date);
                                         const { color, icon: StatusIcon } = getStatusDetails(status);
                                         const isToday = date.toDateString() === new Date().toDateString();
-                                        const isDynamic = status === 'Occupied' || status === 'Booked';
+                                        const isDynamic = status === 'Occupied' || status === 'Booked' || status === 'checking out' || status === 'late checkout' || status === 'Reserved';
 
                                         return (
                                            <td key={idx} className={`p-2 transition-all ${isToday ? 'bg-[var(--theme-color,#4f46e5)]/5 shadow-inner' : ''}`}>
@@ -498,7 +515,10 @@ export default function HousekeepingPage() {
                                                       value={room.housekeeping_status || 'Vacant Ready'}
                                                       onChange={(e) => updateHousekeeping.mutate({ id: room.id, status: e.target.value })}
                                                    >
-                                                      {STATUS_OPTIONS.filter(s => s !== 'All').map(opt => (
+                                                      {room.housekeeping_status && NON_ACTIONABLE_STATUSES.has(room.housekeeping_status) && (
+                                                        <option value={room.housekeeping_status} disabled hidden>{room.housekeeping_status}</option>
+                                                      )}
+                                                      {ACTIONABLE_STATUS_OPTIONS.map(opt => (
                                                         <option key={opt} value={opt}>{opt}</option>
                                                       ))}
                                                    </select>
