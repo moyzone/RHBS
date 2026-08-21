@@ -538,20 +538,16 @@ export default function CalendarPage() {
                             <select 
                               className={`w-full text-[10px] font-black uppercase tracking-tight p-1.5 rounded-md border-none cursor-pointer focus:ring-0 transition-colors ${statusColors[status]}`}
                               value={status}
+                              disabled={status === 'Occupied' || status === 'Booked' || status === 'checking out'}
                               onChange={(e) => updateHousekeeping.mutate({ id: room.id, status: e.target.value })}
                             >
                               <option value="Room Available">Room Available</option>
-                              <option value="Booked">Booked</option>
                               <option value="Not Ready">Not Ready</option>
                               <option value="Vacant Ready">Vacant Ready</option>
                               <option value="On queue">On queue</option>
-                              <option value="Occupied">Occupied</option>
                               <option value="Do Not Disturb">Do Not Disturb</option>
                               <option value="Cleaning in progress">Cleaning in progress</option>
                               <option value="Sleep out">Sleep out</option>
-                              <option value="late checkout">late checkout</option>
-                              <option value="checking out">checking out</option>
-                              <option value="Reserved">Reserved</option>
                               <option value="Maintenance">Maintenance</option>
                             </select>
                         </div>
