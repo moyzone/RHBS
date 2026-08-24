@@ -125,7 +125,7 @@ export default function RoomsManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoadingRT ? <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr> : roomTypes.map((rt) => {
+              {isLoadingRT ? <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr> : roomTypes.map((rt: any) => {
                 const isEditing = editingRTId === rt.id;
                 return (
                 <tr key={rt.id} className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
@@ -223,7 +223,7 @@ export default function RoomsManagementPage() {
             <label className="text-sm font-medium text-zinc-500 mb-1 block">Assign to Type</label>
             <select className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700 bg-transparent" value={newRoom.room_type_id} onChange={e => setNewRoom({ ...newRoom, room_type_id: e.target.value })}>
               <option value="">Select Type</option>
-              {roomTypes.map(rt => <option key={rt.id} value={rt.id}>{rt.name}</option>)}
+              {roomTypes.map((rt: any) => <option key={rt.id} value={rt.id}>{rt.name}</option>)}
             </select>
           </div>
           <button 
@@ -245,8 +245,8 @@ export default function RoomsManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoadingR ? <tr><td colSpan={3} className="p-4 text-center">Loading...</td></tr> : rooms.map((r) => {
-                const rt = roomTypes.find(t => t.id === r.room_type_id);
+              {isLoadingR ? <tr><td colSpan={3} className="p-4 text-center">Loading...</td></tr> : rooms.map((r: any) => {
+                const rt = roomTypes.find((t: any) => t.id === r.room_type_id);
                 const isEditing = editingRoomId === r.id;
                 return (
                 <tr key={r.id} className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
@@ -267,7 +267,7 @@ export default function RoomsManagementPage() {
                          value={editingRoomForm.room_type_id}
                          onChange={e => setEditingRoomForm({...editingRoomForm, room_type_id: e.target.value})}
                        >
-                         {roomTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                         {roomTypes.map((type: any) => <option key={type.id} value={type.id}>{type.name}</option>)}
                        </select>
                     ) : (rt?.name || 'Unknown')}
                   </td>
