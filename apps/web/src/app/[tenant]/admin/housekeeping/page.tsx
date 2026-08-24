@@ -166,7 +166,7 @@ export default function HousekeepingPage() {
       
       const matchesSearch = searchTerm === '' || 
                            r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           roomTypes.find(t => t.id === typeId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
+                           roomTypes.find((t: any) => t.id === typeId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesStatus = activeStatusFilter === 'All' || effectiveStatus === activeStatusFilter;
       return matchesSearch && matchesStatus;

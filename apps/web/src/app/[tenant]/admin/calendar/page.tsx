@@ -46,6 +46,8 @@ export default function CalendarPage() {
 
   const [bookingModal, setBookingModal] = useState<{ isOpen: boolean, roomId: string, date: Date | null }>({ isOpen: false, roomId: '', date: null });
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [roomSearchTerm, setRoomSearchTerm] = useState('');
+  const [isRoomDropdownOpen, setIsRoomDropdownOpen] = useState(false);
 
   const [newBooking, setNewBooking] = useState({ 
     guest_name: '', 
@@ -132,6 +134,8 @@ export default function CalendarPage() {
       check_out: nextDay.toISOString().split('T')[0]
     });
     setIsFullPayment(true);
+    setRoomSearchTerm('');
+    setIsRoomDropdownOpen(false);
     setBookingModal({ isOpen: true, roomId, date });
   };
 
@@ -186,6 +190,37 @@ export default function CalendarPage() {
     }));
   };
 
+  const isRoomBookedForDates = (roomId: string, checkInDate: Date | null, checkOutDateStr: string) => {
+    if (!checkInDate || !checkOutDateStr) return false;
+    const newStartStr = checkInDate.toISOString().split('T')[0];
+    const newEndStr = checkOutDateStr;
+    
+    return bookings.some((b: any) => {
+      if (b.room_id !== roomId) return false;
+      if (b.status === 'Cancelled' || b.status === 'Checked-out') return false;
+      const bIn = b.check_in.split('T')[0];
+      const bOut = b.check_out.split('T')[0];
+      return newStartStr < bOut && newEndStr > bIn;
+    });
+  };
+
+  const handleRoomChange = (newRoomId: string) => {
+    const room = rooms.find((r: any) => r.id === newRoomId);
+    const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
+    const basePrice = roomType?.base_price || 0;
+    const nights = calculateNights();
+    const newTotal = nights * basePrice;
+
+    setBookingModal(prev => ({ ...prev, roomId: newRoomId }));
+    setNewBooking(prev => ({
+      ...prev,
+      total_price: newTotal,
+      amount_paid: isFullPayment ? newTotal : prev.amount_paid
+    }));
+    setIsRoomDropdownOpen(false);
+    setRoomSearchTerm('');
+  };
+
   const getBookingForCell = (roomId: string, cellDate: Date) => {
     const dStr = cellDate.toISOString().split('T')[0];
     return bookings.find((b: any) => {
@@ -199,7 +234,7 @@ export default function CalendarPage() {
   const getAvailabilityForType = (typeId: string, cellDate: Date) => {
     const dStr = cellDate.toISOString().split('T')[0];
     const roomsOfType = rooms.filter((r: any) => r.room_type_id === typeId);
-    const bookedRoomsCount = roomsOfType.filter(room => {
+    const bookedRoomsCount = roomsOfType.filter((room: any) => {
       return bookings.some((b: any) => {
         if (b.room_id !== room.id) return false;
         const bIn = b.check_in.split('T')[0];
@@ -576,12 +611,126 @@ export default function CalendarPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-[40px] w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="p-8 pb-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-               <div>
+            <div className="p-8 pb-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-start gap-4">
+               <div className="flex-1">
                   <h2 className="text-2xl font-black tracking-tight">Reserve Space</h2>
-                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mt-1">Allocation for Room {rooms.find(r => r.id === bookingModal.roomId)?.name}</p>
+                  
+                  {/* Searchable Room Allocation Dropdown */}
+                  <div className="relative mt-2">
+                     <div 
+                       onClick={() => setIsRoomDropdownOpen(!isRoomDropdownOpen)}
+                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700/80 rounded-xl cursor-pointer transition-all border border-zinc-200 dark:border-zinc-700 group"
+                     >
+                        <BedDouble className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                           Allocation for Room <span className="font-extrabold underline decoration-indigo-500 underline-offset-2">{rooms.find((r: any) => r.id === bookingModal.roomId)?.name || 'Select Room'}</span>
+                        </span>
+                        {(() => {
+                          const currentRoom = rooms.find((r: any) => r.id === bookingModal.roomId);
+                          const roomType = roomTypes.find((rt: any) => rt.id === currentRoom?.room_type_id);
+                          return roomType?.name ? (
+                            <span className="text-[10px] font-semibold text-zinc-400 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
+                              {roomType.name}
+                            </span>
+                          ) : null;
+                        })()}
+                        <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isRoomDropdownOpen ? 'rotate-180' : ''}`} />
+                     </div>
+
+                     {isRoomDropdownOpen && (
+                        <div className="absolute left-0 top-full mt-2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                           {/* Search Input inside Dropdown */}
+                           <div className="relative">
+                              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                              <input
+                                 type="text"
+                                 placeholder="Search room name or type..."
+                                 value={roomSearchTerm}
+                                 onChange={(e) => setRoomSearchTerm(e.target.value)}
+                                 onClick={(e) => e.stopPropagation()}
+                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                                 autoFocus
+                              />
+                           </div>
+
+                           {/* Room Options List */}
+                           <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                              {(() => {
+                                 const filtered = rooms.filter((r: any) => {
+                                    const roomType = roomTypes.find((rt: any) => rt.id === r.room_type_id);
+                                    const query = roomSearchTerm.toLowerCase();
+                                    return r.name.toLowerCase().includes(query) || (roomType?.name && roomType.name.toLowerCase().includes(query));
+                                 });
+
+                                 if (filtered.length === 0) {
+                                    return (
+                                       <div className="p-4 text-center text-xs text-zinc-400 font-medium">
+                                          No rooms found matching "{roomSearchTerm}"
+                                       </div>
+                                    );
+                                 }
+
+                                 return filtered.map((r: any) => {
+                                    const roomType = roomTypes.find((rt: any) => rt.id === r.room_type_id);
+                                    const isSelected = r.id === bookingModal.roomId;
+                                    const isBooked = isRoomBookedForDates(r.id, bookingModal.date, newBooking.check_out);
+
+                                    return (
+                                       <div
+                                          key={r.id}
+                                          onClick={() => handleRoomChange(r.id)}
+                                          className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${
+                                             isSelected
+                                                ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800'
+                                                : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent'
+                                          }`}
+                                       >
+                                          <div className="flex items-center gap-3">
+                                             <div className={`p-2 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>
+                                                <BedDouble className="w-4 h-4" />
+                                             </div>
+                                             <div>
+                                                <div className="flex items-center gap-2">
+                                                   <span className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{r.name}</span>
+                                                   {isSelected && <span className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-1.5 py-0.5 rounded">Selected</span>}
+                                                </div>
+                                                <p className="text-[10px] font-medium text-zinc-400">
+                                                   {roomType?.name || 'Standard'} • ₹{roomType?.base_price || 0}/night
+                                                </p>
+                                             </div>
+                                          </div>
+
+                                          {/* Availability Badge */}
+                                          <div>
+                                             {isBooked ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-0.5 rounded-full">
+                                                   <AlertTriangle className="w-3 h-3" /> Booked
+                                                </span>
+                                             ) : (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-0.5 rounded-full">
+                                                   <CheckCircle className="w-3 h-3" /> Available
+                                                </span>
+                                             )}
+                                          </div>
+                                       </div>
+                                    );
+                                 });
+                              })()}
+                           </div>
+                        </div>
+                     )}
+                  </div>
                </div>
-               <button onClick={() => setBookingModal({ isOpen: false, roomId: '', date: null })} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all text-zinc-400 hover:text-zinc-900"><X /></button>
+
+               <button 
+                  onClick={() => {
+                     setIsRoomDropdownOpen(false);
+                     setBookingModal({ isOpen: false, roomId: '', date: null });
+                  }} 
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all text-zinc-400 hover:text-zinc-900"
+               >
+                  <X />
+               </button>
             </div>
 
             <div className="p-10 space-y-8 max-h-[80vh] overflow-y-auto custom-scrollbar">

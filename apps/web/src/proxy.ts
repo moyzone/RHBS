@@ -17,13 +17,17 @@ export function proxy(req: NextRequest) {
   const hostname = req.headers.get("host") || "";
   const domain = hostname.split(':')[0];
 
+  // Check if domain is an IP address (IPv4 or IPv6)
+  const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(domain) || domain === "::1";
+
   // Extract potential tenant subdomain
   const currentHost = domain
     .replace(".localhost", "")
     .replace(".restopia.in", "");
 
-  // Direct localhost or base domain access
+  // Direct localhost, IP address, or base domain access
   if (
+    isIpAddress ||
     currentHost === "localhost" || 
     currentHost === "127.0.0.1" || 
     currentHost === "restopia.in"

@@ -100,7 +100,7 @@ export default function BillingPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
 
-  const filteredGuests = allGuests.filter(g => 
+  const filteredGuests = allGuests.filter((g: any) => 
     g.name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
     g.phone?.includes(customerSearch) ||
     g.email?.toLowerCase().includes(customerSearch.toLowerCase())
@@ -120,7 +120,7 @@ export default function BillingPage() {
             method: 'POST',
             body: JSON.stringify(data)
         }),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setSelectedInvoice(data);
       setJustCreated(true);
       setReviewingBooking(null);
@@ -150,7 +150,7 @@ export default function BillingPage() {
 
   const saveInvoice = useMutation({
     mutationFn: (data: any) => fetchApi(tenant, '/invoices', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setSelectedInvoice(data);
       setJustCreated(true);
       setInvoicedItems([]);
@@ -450,7 +450,7 @@ export default function BillingPage() {
                           
                           {showSearchResults && customerSearch.length > 0 && (
                              <div className="absolute z-20 left-0 right-0 top-full mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
-                                {filteredGuests.length > 0 ? filteredGuests.map(g => (
+                                {filteredGuests.length > 0 ? filteredGuests.map((g: any) => (
                                    <div 
                                      key={g.id}
                                      onClick={() => {

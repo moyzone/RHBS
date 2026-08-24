@@ -24,13 +24,13 @@ export default function GuestsPage() {
     enabled: !!selectedGuest
   });
 
-  const filteredGuests = guests.filter(g => 
+  const filteredGuests = guests.filter((g: any) => 
     g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     g.phone.includes(searchTerm) ||
     (g.email && g.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalSpent = history.reduce((acc, b) => acc + (Number(b.total_price) || 0), 0);
+  const totalSpent = history.reduce((acc: number, b: any) => acc + (Number(b.total_price) || 0), 0);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 min-h-screen">
@@ -60,7 +60,7 @@ export default function GuestsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredGuests.map((guest) => (
+          {filteredGuests.map((guest: any) => (
             <div key={guest.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--theme-color,#4f46e5)] opacity-[0.04] rounded-bl-full -mr-12 -mt-12 group-hover:scale-125 transition-transform duration-500"></div>
               
