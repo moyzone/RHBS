@@ -1,3 +1,9 @@
+/**
+ * Multi-Tenant Subdomain Proxy Handler
+ * Re-exported as Next.js middleware in `src/middleware.ts`.
+ * DO NOT delete or bypass this logic without updating multi-tenant routing specifications.
+ */
+
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
