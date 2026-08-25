@@ -828,17 +828,23 @@ export default function CalendarPage() {
                        )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                       <select className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none bg-transparent" value={newBooking.payment_method} onChange={e => setNewBooking({ ...newBooking, payment_method: e.target.value })}>
-                          <option value="UPI">UPI</option>
-                          <option value="Cash">Cash</option>
-                          <option value="Card">Card</option>
-                       </select>
-                       <select className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none bg-transparent" value={newBooking.booking_source} onChange={e => setNewBooking({ ...newBooking, booking_source: e.target.value })}>
-                          <option value="Offline">Offline</option>
-                          <option value="MMT">MMT</option>
-                          <option value="Airbnb">Airbnb</option>
-                       </select>
-                    </div>
+                        <div className="space-y-1.5">
+                           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Payment Mode</span>
+                           <select className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none bg-transparent" value={newBooking.payment_method} onChange={e => setNewBooking({ ...newBooking, payment_method: e.target.value })}>
+                              <option value="UPI">UPI</option>
+                              <option value="Cash">Cash</option>
+                              <option value="Card">Card</option>
+                           </select>
+                        </div>
+                        <div className="space-y-1.5">
+                           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Source</span>
+                           <select className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none bg-transparent" value={newBooking.booking_source} onChange={e => setNewBooking({ ...newBooking, booking_source: e.target.value })}>
+                              <option value="Offline">Offline</option>
+                              <option value="MMT">MMT</option>
+                              <option value="Airbnb">Airbnb</option>
+                           </select>
+                        </div>
+                     </div>
                  </div>
               </div>
             </div>
