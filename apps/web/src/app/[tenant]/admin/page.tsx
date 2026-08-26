@@ -3,7 +3,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import {
   Users, BedDouble, Calendar, CreditCard, Brush, TrendingUp, Clock, CheckCircle2, AlertTriangle
 } from 'lucide-react';
@@ -24,7 +24,9 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const params = useParams();
+  const pathname = usePathname();
   const tenant = params.tenant as string;
+  const basePath = pathname.startsWith(`/${tenant}`) ? `/${tenant}` : '';
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboardStats', tenant],
@@ -42,14 +44,14 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-3">
           <Link
-            href={`/${tenant}/admin/calendar`}
+            href={`${basePath}/admin/calendar`}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--theme-color,#4f46e5)] text-white text-sm font-medium rounded-lg shadow hover:opacity-90 transition-opacity"
           >
             <Calendar className="w-4 h-4" />
             Master Calendar
           </Link>
           <Link
-            href={`/${tenant}/admin/rooms`}
+            href={`${basePath}/admin/rooms`}
             className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-medium rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
           >
             <BedDouble className="w-4 h-4" />
@@ -129,7 +131,7 @@ export default function DashboardPage() {
               <Brush className="w-5 h-5 text-indigo-500" />
               Housekeeping Status
             </h3>
-            <Link href={`/${tenant}/admin/housekeeping`} className="text-xs text-[var(--theme-color,#4f46e5)] hover:underline font-medium">
+            <Link href={`${basePath}/admin/housekeeping`} className="text-xs text-[var(--theme-color,#4f46e5)] hover:underline font-medium">
               View All
             </Link>
           </div>
@@ -161,19 +163,19 @@ export default function DashboardPage() {
         <div className="md:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg">Quick Action</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <Link href={`/${tenant}/admin/calendar`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
+            <Link href={`${basePath}/admin/calendar`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
               <Calendar className="w-6 h-6 text-zinc-500 group-hover:text-[var(--theme-color,#4f46e5)] mb-2" />
               <div className="font-medium text-sm">New Booking</div>
               <div className="text-xs text-zinc-500">Add reservation</div>
             </Link>
 
-            <Link href={`/${tenant}/admin/billing`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
+            <Link href={`${basePath}/admin/billing`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
               <CreditCard className="w-6 h-6 text-zinc-500 group-hover:text-[var(--theme-color,#4f46e5)] mb-2" />
               <div className="font-medium text-sm">Create Invoice</div>
               <div className="text-xs text-zinc-500">Billing & GST tax</div>
             </Link>
 
-            <Link href={`/${tenant}/admin/guests`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
+            <Link href={`${basePath}/admin/guests`} className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-[var(--theme-color,#4f46e5)] transition-colors group">
               <Users className="w-6 h-6 text-zinc-500 group-hover:text-[var(--theme-color,#4f46e5)] mb-2" />
               <div className="font-medium text-sm">Guest Directory</div>
               <div className="text-xs text-zinc-500">ID proofs & history</div>

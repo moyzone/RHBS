@@ -1,6 +1,6 @@
 /**
- * Multi-Tenant Subdomain Proxy Handler
- * Re-exported as Next.js middleware in `src/middleware.ts`.
+ * Next.js 16 Multi-Tenant Subdomain Proxy Handler
+ * Primary entrypoint for subdomain interception and tenant route rewriting.
  * DO NOT delete or bypass this logic without updating multi-tenant routing specifications.
  */
 
@@ -46,6 +46,11 @@ export function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL(targetPath, req.url));
     }
     return NextResponse.next();
+  }
+
+  // Subdomain root redirect to /admin (e.g. hotelflora.localhost/ -> hotelflora.localhost/admin)
+  if (url.pathname === "/") {
+    return NextResponse.redirect(new URL("/admin", req.url));
   }
 
   // If the pathname already starts with the tenant subdomain path (e.g. /hotelflora/admin/rooms),

@@ -5,6 +5,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 ## Multi-Tenant Subdomain Routing Rules
-- `apps/web/src/middleware.ts` is strictly mandatory for Next.js multi-tenant subdomain resolution.
-- **DO NOT** rename, move, delete, or ignore `apps/web/src/middleware.ts` or `apps/web/src/proxy.ts`.
-- Next.js requires the entrypoint file to be named `middleware.ts` (exporting a `middleware` function) to intercept and rewrite subdomain requests (e.g. `http://<tenant>.localhost:3000/admin/...` -> `/<tenant>/admin/...`).
+- `apps/web/src/proxy.ts` is strictly mandatory for Next.js 16 multi-tenant subdomain resolution.
+- **DO NOT** rename, move, delete, or ignore `apps/web/src/proxy.ts`.
+- Next.js 16 requires the entrypoint file to be named `proxy.ts` (exporting a `proxy` function) to intercept and rewrite subdomain requests (e.g. `http://<tenant>.localhost:3000/admin/...` -> `/<tenant>/admin/...`).
+- **DO NOT** add a `src/middleware.ts` file, as Next.js 16 will fail if both exist.
