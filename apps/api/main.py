@@ -230,7 +230,9 @@ def get_dashboard_stats(context: dict = Depends(get_user_context), db: Session =
     
     # Bookings with check_in on or before today and check_out on or after today
     checked_in_bookings = db.query(Booking).filter(
-        Booking.status == "Checked-in"
+        Booking.status == "Checked-in",
+        Booking.check_in <= today_end,
+        Booking.check_out >= today_start
     ).all()
     
     # Check-ins today
