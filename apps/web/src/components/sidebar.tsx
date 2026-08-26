@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Home, CalendarDays, BedDouble, Users, CreditCard, Menu, X, UserCircle, Brush, Shield
 } from 'lucide-react';
@@ -69,11 +70,14 @@ export function Sidebar({ tenantId }: SidebarProps) {
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = item.href === `${basePath}/admin` 
+              ? (pathname === `${basePath}/admin` || pathname === `${basePath}/admin/`)
+              : (pathname === item.href || pathname.startsWith(`${item.href}/`));
             return (
-              <a
+              <Link
                 key={item.name}
                 href={item.href}
+                onClick={closeSidebar}
                 className={cn(
                   "flex items-center px-3 py-2.5 text-base font-medium rounded-md transition-colors",
                   isActive 
@@ -83,7 +87,7 @@ export function Sidebar({ tenantId }: SidebarProps) {
               >
                 <item.icon className={cn("mr-3 h-5 w-5", isActive ? "text-white" : "text-zinc-500 group-hover:text-zinc-300")} />
                 {item.name}
-              </a>
+              </Link>
             )
           })}
         </nav>
