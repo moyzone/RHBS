@@ -7,7 +7,7 @@ import { fetchApi } from '@/lib/api';
 import {
   X, Edit2, Check, Search, ChevronLeft, ChevronRight,
   Calendar as CalendarIcon, ChevronDown, CreditCard, LogIn, LogOut,
-  BedDouble, CheckCircle, AlertTriangle, Brush, ShieldCheck, Filter
+  BedDouble, CheckCircle, AlertTriangle, Brush, ShieldCheck, Filter, Pencil
 } from 'lucide-react';
 
 const STATUS_MEANINGS: Record<string, string> = {
@@ -110,6 +110,50 @@ export default function CalendarPage() {
       qc.invalidateQueries({ queryKey: ['bookings', tenant] });
       setEditingPaymentId(null);
       setSelectedBooking(null);
+    }
+  });
+
+  const [isEditBookingMode, setIsEditBookingMode] = useState(false);
+  const [editBookingData, setEditBookingData] = useState({
+    check_out: '',
+    payment_method: 'UPI',
+    booking_source: 'Offline'
+  });
+
+  const handleToggleEditMode = () => {
+    if (!isEditBookingMode && selectedBooking) {
+      setEditBookingData({
+        check_out: selectedBooking.check_out ? selectedBooking.check_out.split('T')[0] : '',
+        payment_method: selectedBooking.payment_method || 'UPI',
+        booking_source: selectedBooking.booking_source || 'Offline'
+      });
+    }
+    setIsEditBookingMode(prev => !prev);
+  };
+
+  const updateBookingDetails = useMutation({
+    mutationFn: (data: { id: string, check_out?: string, payment_method?: string, booking_source?: string }) =>
+      fetchApi(tenant, `/bookings/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          check_out: data.check_out ? new Date(data.check_out).toISOString() : undefined,
+          payment_method: data.payment_method,
+          booking_source: data.booking_source
+        })
+      }),
+    onSuccess: (updatedBooking: any) => {
+      qc.invalidateQueries({ queryKey: ['bookings', tenant] });
+      if (updatedBooking && updatedBooking.id) {
+        setSelectedBooking(updatedBooking);
+      } else {
+        setSelectedBooking((prev: any) => ({
+          ...prev,
+          check_out: editBookingData.check_out ? new Date(editBookingData.check_out).toISOString() : prev.check_out,
+          payment_method: editBookingData.payment_method,
+          booking_source: editBookingData.booking_source
+        }));
+      }
+      setIsEditBookingMode(false);
     }
   });
 
@@ -919,16 +963,89 @@ export default function CalendarPage() {
       {selectedBooking && (
         <div className="fixed inset-y-0 right-0 z-50 w-96 bg-white dark:bg-zinc-900 shadow-2xl border-l border-zinc-200 dark:border-zinc-800 transform transition-transform p-6 overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold">Booking Details</h2>
-            <button onClick={() => setSelectedBooking(null)}><X className="w-5 h-5 text-zinc-500 hover:text-zinc-800" /></button>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold">Booking Details</h2>
+              <button
+                onClick={handleToggleEditMode}
+                className={`p-1.5 rounded-lg transition-all ${
+                  isEditBookingMode
+                    ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-400'
+                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+                title={isEditBookingMode ? "Cancel Editing" : "Edit Booking Details"}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+            <button onClick={() => { setSelectedBooking(null); setIsEditBookingMode(false); }}>
+              <X className="w-5 h-5 text-zinc-500 hover:text-zinc-800" />
+            </button>
           </div>
           <div className="space-y-4">
             <div><p className="text-sm text-zinc-500">Guest Name</p><p className="font-semibold text-lg">{selectedBooking.guest_name}</p></div>
-            <div><p className="text-sm text-zinc-500">Dates</p><p>{selectedBooking.check_in.split('T')[0]} to {selectedBooking.check_out.split('T')[0]}</p></div>
+            
+            <div>
+              <p className="text-sm text-zinc-500 mb-1">Dates</p>
+              {isEditBookingMode ? (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block font-medium">Check-in</span>
+                    <input
+                      type="date"
+                      disabled
+                      value={selectedBooking.check_in.split('T')[0]}
+                      className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-2 rounded text-xs font-semibold cursor-not-allowed opacity-75"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block font-medium">Checkout</span>
+                    <input
+                      type="date"
+                      min={selectedBooking.check_in.split('T')[0]}
+                      value={editBookingData.check_out}
+                      onChange={e => setEditBookingData(prev => ({ ...prev, check_out: e.target.value }))}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2 rounded text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p>{selectedBooking.check_in.split('T')[0]} to {selectedBooking.check_out.split('T')[0]}</p>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div><p className="text-sm text-zinc-500">Source</p><p className="font-medium">{selectedBooking.booking_source || 'Offline'}</p></div>
-              <div><p className="text-sm text-zinc-500">Payment Mode</p><p className="font-medium">{selectedBooking.payment_method || 'UPI'}</p></div>
+              <div>
+                <p className="text-sm text-zinc-500 mb-1">Source</p>
+                {isEditBookingMode ? (
+                  <select
+                    value={editBookingData.booking_source}
+                    onChange={e => setEditBookingData(prev => ({ ...prev, booking_source: e.target.value }))}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2 rounded text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Offline">Offline</option>
+                    <option value="MMT">MMT</option>
+                    <option value="Airbnb">Airbnb</option>
+                  </select>
+                ) : (
+                  <p className="font-medium">{selectedBooking.booking_source || 'Offline'}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm text-zinc-500 mb-1">Payment Mode</p>
+                {isEditBookingMode ? (
+                  <select
+                    value={editBookingData.payment_method}
+                    onChange={e => setEditBookingData(prev => ({ ...prev, payment_method: e.target.value }))}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2 rounded text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="UPI">UPI</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                  </select>
+                ) : (
+                  <p className="font-medium">{selectedBooking.payment_method || 'UPI'}</p>
+                )}
+              </div>
             </div>
 
             <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-lg space-y-2">
@@ -1021,15 +1138,40 @@ export default function CalendarPage() {
               <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${selectedBooking.status === 'Checked-out' ? 'bg-zinc-200 text-zinc-800' : 'bg-emerald-100 text-emerald-800'}`}>{selectedBooking.status}</span>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
-              <h3 className="text-sm font-semibold mb-2">Actions</h3>
-              {selectedBooking.status !== 'Checked-in' && selectedBooking.status !== 'Checked-out' && (
-                <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-in' })} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 rounded">Mark Checked-In</button>
-              )}
-              {selectedBooking.status === 'Checked-in' && (
-                <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-out' })} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded">Check Out Guest</button>
-              )}
-            </div>
+            {isEditBookingMode ? (
+              <div className="pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    updateBookingDetails.mutate({
+                      id: selectedBooking.id,
+                      check_out: editBookingData.check_out,
+                      payment_method: editBookingData.payment_method,
+                      booking_source: editBookingData.booking_source
+                    })
+                  }
+                  disabled={updateBookingDetails.isPending}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded text-sm transition-all shadow-md disabled:opacity-50"
+                >
+                  {updateBookingDetails.isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={() => setIsEditBookingMode(false)}
+                  className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 font-semibold rounded text-sm transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+                <h3 className="text-sm font-semibold mb-2">Actions</h3>
+                {selectedBooking.status !== 'Checked-in' && selectedBooking.status !== 'Checked-out' && (
+                  <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-in' })} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 rounded">Mark Checked-In</button>
+                )}
+                {selectedBooking.status === 'Checked-in' && (
+                  <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-out' })} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded">Check Out Guest</button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
