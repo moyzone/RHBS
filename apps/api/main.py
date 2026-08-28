@@ -495,11 +495,15 @@ def update_booking_status(booking_id: str, req: StatusUpdate, context: dict = De
         raise HTTPException(404, "Booking not found")
     booking.status = req.status
     
-    # NEW: Automatically mark room as Dirty when guest checks out
+    # Automatically mark room as Dirty when guest checks out, or Occupied when guest checks in
     if req.status == "Checked-out":
         room = db.query(Room).filter(Room.id == booking.room_id).first()
         if room:
             room.housekeeping_status = "Dirty"
+    elif req.status == "Checked-in":
+        room = db.query(Room).filter(Room.id == booking.room_id).first()
+        if room:
+            room.housekeeping_status = "Occupied"
             
     db.commit()
     db.refresh(booking)

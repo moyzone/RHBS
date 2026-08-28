@@ -71,13 +71,18 @@ export default function CalendarPage() {
     mutationFn: async (args: { id: string, status: string }) => {
       const res = await fetchApi(tenant, `/bookings/${args.id}/status`, { method: 'PUT', body: JSON.stringify({ status: args.status }) });
 
-      // If checking out, also set room status to 'Not Ready' (Dirty)
-      if (args.status === 'Checked-out') {
-        const booking = bookings.find((b: any) => b.id === args.id);
-        if (booking?.room_id) {
+      // Sync room status: Dirty when guest checks out, Occupied when guest checks in
+      const booking = bookings.find((b: any) => b.id === args.id);
+      if (booking?.room_id) {
+        if (args.status === 'Checked-out') {
           await fetchApi(tenant, `/rooms/${booking.room_id}/housekeeping`, {
             method: 'PATCH',
             body: JSON.stringify({ status: 'Not Ready' })
+          });
+        } else if (args.status === 'Checked-in') {
+          await fetchApi(tenant, `/rooms/${booking.room_id}/housekeeping`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'Occupied' })
           });
         }
       }
@@ -343,6 +348,35 @@ export default function CalendarPage() {
       const bOut = b.check_out.split('T')[0];
       return newStartStr < bOut && newEndStr > bIn;
     });
+  };
+
+  const getRoomEffectiveStatus = (room: any, date: Date = today) => {
+    const dStr = getLocalDateStr(date);
+
+    const booking = bookings.find((b: any) => {
+      if (b.room_id !== room.id) return false;
+      if (b.status === 'Cancelled') return false;
+      const bIn = getLocalDateStr(b.check_in);
+      const bOut = getLocalDateStr(b.check_out);
+      return dStr >= bIn && dStr < bOut;
+    });
+
+    if (booking) {
+      return booking.status === 'Checked-in' ? 'Occupied' : 'Booked';
+    }
+
+    const checkoutBooking = bookings.find((b: any) => {
+      if (b.room_id !== room.id) return false;
+      if (b.status === 'Cancelled') return false;
+      const bOut = getLocalDateStr(b.check_out);
+      return dStr === bOut && b.status !== 'Checked-out';
+    });
+
+    if (checkoutBooking) {
+      return 'checking out';
+    }
+
+    return room.housekeeping_status || 'Room Available';
   };
 
   const handleRoomChange = (newRoomId: string) => {
@@ -615,17 +649,19 @@ export default function CalendarPage() {
               />
             </div>
           </div>
-
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
-            {['All', 'Room Available', 'Not Ready', 'Vacant Ready', 'On queue', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Maintenance'].map(status => {
+            {['All', 'Room Available', 'Occupied', 'Booked', 'checking out', 'Not Ready', 'Vacant Ready', 'On queue', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Maintenance'].map(status => {
               const count = status === 'All'
                 ? rooms.length
-                : rooms.filter((r: any) => (r.housekeeping_status || 'Room Available') === status).length;
+                : rooms.filter((r: any) => getRoomEffectiveStatus(r) === status).length;
 
               const colors: any = {
                 'All': 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800',
                 'Room Available': 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800',
+                'Occupied': 'text-rose-600 bg-rose-50 dark:bg-rose-900/10',
+                'Booked': 'text-pink-600 bg-pink-50 dark:bg-pink-900/10',
+                'checking out': 'text-purple-600 bg-purple-50 dark:bg-purple-900/10',
                 'Not Ready': 'text-orange-500 bg-orange-50 dark:bg-orange-900/10',
                 'Vacant Ready': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/10',
                 'On queue': 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/10',
@@ -658,7 +694,7 @@ export default function CalendarPage() {
                 const matchesSearch = housekeepingSearch === '' ||
                   r.name.toLowerCase().includes(housekeepingSearch.toLowerCase()) ||
                   type.name.toLowerCase().includes(housekeepingSearch.toLowerCase());
-                const matchesStatus = activeStatusFilter === 'All' || (r.housekeeping_status || 'Clean') === activeStatusFilter;
+                const matchesStatus = activeStatusFilter === 'All' || getRoomEffectiveStatus(r) === activeStatusFilter;
                 return matchesSearch && matchesStatus;
               });
 
@@ -673,10 +709,11 @@ export default function CalendarPage() {
 
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                     {roomsOfType.map((room: any) => {
-                      const status = room.housekeeping_status || 'Clean';
+                      const status = getRoomEffectiveStatus(room);
                       const statusColors: any = {
                         'Room Available': 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800',
                         'Booked': 'text-pink-600 bg-pink-50 dark:bg-pink-900/10',
+                        'checking out': 'text-purple-600 bg-purple-50 dark:bg-purple-900/10',
                         'Not Ready': 'text-orange-600 bg-orange-50 dark:bg-orange-900/10',
                         'Vacant Ready': 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/10',
                         'On queue': 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/10',
@@ -690,6 +727,7 @@ export default function CalendarPage() {
                       const statusIcons: Record<string, any> = {
                         'Room Available': CheckCircle,
                         'Booked': BedDouble,
+                        'checking out': LogOut,
                         'Not Ready': AlertTriangle,
                         'Vacant Ready': CheckCircle,
                         'On queue': Brush,
@@ -704,7 +742,7 @@ export default function CalendarPage() {
 
                       return (
                         <div key={room.id} className="bg-white dark:bg-zinc-900 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-800 group hover:border-[var(--theme-color,#4f46e5)] transition-all">
-                          <div className="flex items-center justify-between mb-3" title={STATUS_MEANINGS[status]}>
+                          <div className="flex items-center justify-between mb-3" title={STATUS_MEANINGS[status] || status}>
                             <span className="text-base font-bold">{room.name}</span>
                             <StatusIcon className={`w-4 h-4 ${statusColors[status]?.split(' ')[0]}`} />
                           </div>
@@ -715,6 +753,9 @@ export default function CalendarPage() {
                             onChange={(e) => updateHousekeeping.mutate({ id: room.id, status: e.target.value })}
                           >
                             <option value="Room Available">Room Available</option>
+                            <option value="Occupied">Occupied</option>
+                            <option value="Booked">Booked</option>
+                            <option value="checking out">Checking Out</option>
                             <option value="Not Ready">Not Ready</option>
                             <option value="Vacant Ready">Vacant Ready</option>
                             <option value="On queue">On queue</option>
@@ -735,7 +776,7 @@ export default function CalendarPage() {
               rooms.filter((r: any) => {
                 if (r.room_type_id !== type.id) return false;
                 const matchesSearch = housekeepingSearch === '' || r.name.toLowerCase().includes(housekeepingSearch.toLowerCase());
-                const matchesStatus = activeStatusFilter === 'All' || (r.housekeeping_status || 'Clean') === activeStatusFilter;
+                const matchesStatus = activeStatusFilter === 'All' || getRoomEffectiveStatus(r) === activeStatusFilter;
                 return matchesSearch && matchesStatus;
               }).length === 0
             )) && (
