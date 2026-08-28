@@ -490,13 +490,20 @@ def update_payment(payment_id: str, req: PaymentUpdate, context: dict = Depends(
 @app.put("/api/bookings/{booking_id}/status")
 def update_booking_status(booking_id: str, req: StatusUpdate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = db.query(Booking).options(joinedload(Booking.payments)).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(404, "Booking not found")
-    booking.status = req.status
     
     # Automatically mark room as Dirty when guest checks out, or Occupied when guest checks in
     if req.status == "Checked-out":
+        total_paid = sum(p.amount for p in (booking.payments or []))
+        balance = (booking.total_price or 0.0) - total_paid
+        if balance > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot checkout booking with pending balance of ₹{balance:.2f}"
+            )
+
         room = db.query(Room).filter(Room.id == booking.room_id).first()
         if room:
             room.housekeeping_status = "Dirty"
@@ -504,7 +511,8 @@ def update_booking_status(booking_id: str, req: StatusUpdate, context: dict = De
         room = db.query(Room).filter(Room.id == booking.room_id).first()
         if room:
             room.housekeeping_status = "Occupied"
-            
+
+    booking.status = req.status
     db.commit()
     db.refresh(booking)
     return booking

@@ -88,6 +88,9 @@ export default function CalendarPage() {
       }
       return res;
     },
+    onError: (err: any) => {
+      alert(err?.message || "Failed to update booking status");
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bookings', tenant] });
       qc.invalidateQueries({ queryKey: ['rooms', tenant] });
@@ -1347,9 +1350,28 @@ export default function CalendarPage() {
                 {selectedBooking.status !== 'Checked-in' && selectedBooking.status !== 'Checked-out' && (
                   <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-in' })} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 rounded">Mark Checked-In</button>
                 )}
-                {selectedBooking.status === 'Checked-in' && (
-                  <button onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-out' })} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded">Check Out Guest</button>
-                )}
+                {selectedBooking.status === 'Checked-in' && (() => {
+                  const totalPaid = (selectedBooking.payments || []).reduce((acc: number, p: any) => acc + p.amount, 0);
+                  const pendingBal = Number(selectedBooking.total_price || 0) - totalPaid;
+
+                  return (
+                    <div className="space-y-3">
+                      {pendingBal > 0 && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <span>Cannot check out: Outstanding balance of ₹{pendingBal} remaining.</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => updateStatus.mutate({ id: selectedBooking.id, status: 'Checked-out' })}
+                        disabled={pendingBal > 0 || updateStatus.isPending}
+                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:text-zinc-400 dark:disabled:text-zinc-600 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-all"
+                      >
+                        {updateStatus.isPending ? 'Processing...' : 'Check Out Guest'}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
