@@ -113,29 +113,82 @@ export default function CalendarPage() {
     }
   });
 
+  const isRoomBookedExceptSelf = (roomId: string, checkInDateStr: string, checkOutDateStr: string, currentBookingId: string) => {
+    if (!checkInDateStr || !checkOutDateStr) return false;
+    return bookings.some((b: any) => {
+      if (b.id === currentBookingId) return false;
+      if (b.room_id !== roomId) return false;
+      if (b.status === 'Cancelled' || b.status === 'Checked-out') return false;
+      const bIn = b.check_in.split('T')[0];
+      const bOut = b.check_out.split('T')[0];
+      return checkInDateStr < bOut && checkOutDateStr > bIn;
+    });
+  };
+
+  const calculateTotalForRoomAndDates = (roomId: string, checkInDateStr: string, checkOutDateStr: string) => {
+    if (!checkInDateStr || !checkOutDateStr) return 0;
+    const start = new Date(checkInDateStr);
+    const end = new Date(checkOutDateStr);
+    const diff = end.getTime() - start.getTime();
+    const nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+
+    const room = rooms.find((r: any) => r.id === roomId);
+    const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
+    const basePrice = roomType?.base_price || 0;
+    return nights * basePrice;
+  };
+
   const [isEditBookingMode, setIsEditBookingMode] = useState(false);
+  const [editRoomSearch, setEditRoomSearch] = useState('');
   const [editBookingData, setEditBookingData] = useState({
+    room_id: '',
     check_out: '',
     payment_method: 'UPI',
-    booking_source: 'Offline'
+    booking_source: 'Offline',
+    total_price: 0 as number | string
   });
 
   const handleToggleEditMode = () => {
     if (!isEditBookingMode && selectedBooking) {
       setEditBookingData({
+        room_id: selectedBooking.room_id || '',
         check_out: selectedBooking.check_out ? selectedBooking.check_out.split('T')[0] : '',
         payment_method: selectedBooking.payment_method || 'UPI',
-        booking_source: selectedBooking.booking_source || 'Offline'
+        booking_source: selectedBooking.booking_source || 'Offline',
+        total_price: selectedBooking.total_price || 0
       });
+      setEditRoomSearch('');
     }
     setIsEditBookingMode(prev => !prev);
   };
 
+  const handleEditRoomChange = (newRoomId: string) => {
+    const checkInStr = selectedBooking.check_in.split('T')[0];
+    const newTotal = calculateTotalForRoomAndDates(newRoomId, checkInStr, editBookingData.check_out);
+    setEditBookingData(prev => ({
+      ...prev,
+      room_id: newRoomId,
+      total_price: newTotal
+    }));
+  };
+
+  const handleEditCheckoutChange = (newCheckoutStr: string) => {
+    const checkInStr = selectedBooking.check_in.split('T')[0];
+    const newTotal = calculateTotalForRoomAndDates(editBookingData.room_id, checkInStr, newCheckoutStr);
+    setEditBookingData(prev => ({
+      ...prev,
+      check_out: newCheckoutStr,
+      total_price: newTotal
+    }));
+  };
+
   const updateBookingDetails = useMutation({
-    mutationFn: (data: { id: string, check_out?: string, payment_method?: string, booking_source?: string }) =>
+    mutationFn: (data: { id: string, room_id?: string, total_price?: number, check_out?: string, payment_method?: string, booking_source?: string }) =>
       fetchApi(tenant, `/bookings/${data.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
+          room_id: data.room_id,
+          total_price: data.total_price,
           check_out: data.check_out ? new Date(data.check_out).toISOString() : undefined,
           payment_method: data.payment_method,
           booking_source: data.booking_source
@@ -148,6 +201,8 @@ export default function CalendarPage() {
       } else {
         setSelectedBooking((prev: any) => ({
           ...prev,
+          room_id: editBookingData.room_id,
+          total_price: editBookingData.total_price,
           check_out: editBookingData.check_out ? new Date(editBookingData.check_out).toISOString() : prev.check_out,
           payment_method: editBookingData.payment_method,
           booking_source: editBookingData.booking_source
@@ -985,6 +1040,86 @@ export default function CalendarPage() {
             <div><p className="text-sm text-zinc-500">Guest Name</p><p className="font-semibold text-lg">{selectedBooking.guest_name}</p></div>
             
             <div>
+              <p className="text-sm text-zinc-500 mb-1">Room</p>
+              {isEditBookingMode ? (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search room..."
+                      value={editRoomSearch}
+                      onChange={e => setEditRoomSearch(e.target.value)}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 pl-8 pr-2 py-1.5 rounded text-xs font-medium focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1 border border-zinc-200 dark:border-zinc-800 rounded-xl p-1 bg-zinc-50/50 dark:bg-zinc-950/50">
+                    {rooms
+                      .filter((r: any) => {
+                        const roomType = roomTypes.find((rt: any) => rt.id === r.room_type_id);
+                        const q = editRoomSearch.toLowerCase();
+                        return r.name.toLowerCase().includes(q) || (roomType?.name && roomType.name.toLowerCase().includes(q));
+                      })
+                      .map((r: any) => {
+                        const roomType = roomTypes.find((rt: any) => rt.id === r.room_type_id);
+                        const isSelected = r.id === editBookingData.room_id;
+                        const isBooked = isRoomBookedExceptSelf(
+                          r.id,
+                          selectedBooking.check_in.split('T')[0],
+                          editBookingData.check_out,
+                          selectedBooking.id
+                        );
+
+                        return (
+                          <div
+                            key={r.id}
+                            onClick={() => {
+                              if (!isBooked) handleEditRoomChange(r.id);
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg transition-all text-xs ${
+                              isSelected
+                                ? 'bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300 dark:border-indigo-800 font-bold'
+                                : isBooked
+                                ? 'bg-zinc-100 dark:bg-zinc-800/40 opacity-50 cursor-not-allowed border border-transparent'
+                                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer border border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-bold text-zinc-900 dark:text-zinc-100">{r.name}</span>
+                              <span className="text-[10px] text-zinc-400 font-medium">{roomType?.name || 'Standard'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-zinc-400 font-medium">₹{roomType?.base_price || 0}/n</span>
+                              {isBooked ? (
+                                <span className="text-[9px] font-black uppercase text-rose-500 bg-rose-50 dark:bg-rose-950/50 px-1.5 py-0.5 rounded">Booked</span>
+                              ) : isSelected ? (
+                                <span className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-1.5 py-0.5 rounded">Selected</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ) : (
+                (() => {
+                  const assignedRoom = rooms.find((r: any) => r.id === selectedBooking.room_id);
+                  const roomType = roomTypes.find((rt: any) => rt.id === assignedRoom?.room_type_id);
+                  return (
+                    <p className="font-semibold text-base">
+                      {assignedRoom ? assignedRoom.name : 'Unassigned'}
+                      {roomType?.name && (
+                        <span className="text-xs font-normal text-zinc-400 ml-1.5">
+                          • {roomType.name}
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()
+              )}
+            </div>
+
+            <div>
               <p className="text-sm text-zinc-500 mb-1">Dates</p>
               {isEditBookingMode ? (
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1003,7 +1138,7 @@ export default function CalendarPage() {
                       type="date"
                       min={selectedBooking.check_in.split('T')[0]}
                       value={editBookingData.check_out}
-                      onChange={e => setEditBookingData(prev => ({ ...prev, check_out: e.target.value }))}
+                      onChange={e => handleEditCheckoutChange(e.target.value)}
                       className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2 rounded text-xs font-semibold focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -1051,7 +1186,9 @@ export default function CalendarPage() {
             <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500">Total Bill</span>
-                <span className="font-semibold">₹{selectedBooking.total_price}</span>
+                <span className="font-semibold">
+                  ₹{isEditBookingMode ? editBookingData.total_price : selectedBooking.total_price}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500">Total Paid</span>
@@ -1059,8 +1196,8 @@ export default function CalendarPage() {
               </div>
               <div className="flex justify-between text-base pt-2 border-t border-zinc-200 dark:border-zinc-700">
                 <span className="font-medium">Pending Balance</span>
-                <span className={`font-bold ${Number(selectedBooking.total_price) - (selectedBooking.payments || []).reduce((acc: number, p: any) => acc + p.amount, 0) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                  ₹{Number(selectedBooking.total_price) - (selectedBooking.payments || []).reduce((acc: number, p: any) => acc + p.amount, 0)}
+                <span className={`font-bold ${Number(isEditBookingMode ? editBookingData.total_price : selectedBooking.total_price) - (selectedBooking.payments || []).reduce((acc: number, p: any) => acc + p.amount, 0) > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                  ₹{Number(isEditBookingMode ? editBookingData.total_price : selectedBooking.total_price) - (selectedBooking.payments || []).reduce((acc: number, p: any) => acc + p.amount, 0)}
                 </span>
               </div>
             </div>
@@ -1144,6 +1281,8 @@ export default function CalendarPage() {
                   onClick={() =>
                     updateBookingDetails.mutate({
                       id: selectedBooking.id,
+                      room_id: editBookingData.room_id,
+                      total_price: Number(editBookingData.total_price),
                       check_out: editBookingData.check_out,
                       payment_method: editBookingData.payment_method,
                       booking_source: editBookingData.booking_source

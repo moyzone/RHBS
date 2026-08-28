@@ -102,6 +102,8 @@ class BookingUpdate(BaseModel):
     check_out: Optional[str] = None
     booking_source: Optional[str] = None
     payment_method: Optional[str] = None
+    room_id: Optional[str] = None
+    total_price: Optional[float] = None
 
 class InvoiceItem(BaseModel):
     description: str
@@ -516,6 +518,10 @@ def update_booking(booking_id: str, req: BookingUpdate, context: dict = Depends(
         booking.booking_source = req.booking_source
     if req.payment_method is not None:
         booking.payment_method = req.payment_method
+    if req.room_id is not None:
+        booking.room_id = req.room_id
+    if req.total_price is not None:
+        booking.total_price = req.total_price
         
     db.commit()
     booking_with_payments = db.query(Booking).options(joinedload(Booking.payments)).filter(Booking.id == booking_id).first()
