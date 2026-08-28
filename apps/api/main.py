@@ -98,6 +98,11 @@ class StatusUpdate(BaseModel):
     assigned_staff: Optional[str] = None
     maintenance_remarks: Optional[str] = None
 
+class BookingUpdate(BaseModel):
+    check_out: Optional[str] = None
+    booking_source: Optional[str] = None
+    payment_method: Optional[str] = None
+
 class InvoiceItem(BaseModel):
     description: str
     amount: float
@@ -497,6 +502,24 @@ def update_booking_status(booking_id: str, req: StatusUpdate, context: dict = De
     db.commit()
     db.refresh(booking)
     return booking
+
+@app.patch("/api/bookings/{booking_id}")
+def update_booking(booking_id: str, req: BookingUpdate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+    set_rls_context(db, context["tenant_id"])
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    
+    if req.check_out is not None:
+        booking.check_out = datetime.fromisoformat(req.check_out.replace("Z", "+00:00"))
+    if req.booking_source is not None:
+        booking.booking_source = req.booking_source
+    if req.payment_method is not None:
+        booking.payment_method = req.payment_method
+        
+    db.commit()
+    booking_with_payments = db.query(Booking).options(joinedload(Booking.payments)).filter(Booking.id == booking_id).first()
+    return booking_with_payments
 
 @app.post("/api/bookings/{booking_id}/invoice")
 def generate_gst_invoice(booking_id: str, req: Optional[InvoiceCreate] = Body(None), context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
