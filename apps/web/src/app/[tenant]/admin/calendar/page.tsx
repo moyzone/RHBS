@@ -220,6 +220,27 @@ export default function CalendarPage() {
     }
   });
 
+  const [overdueWorkflowMode, setOverdueWorkflowMode] = useState<'settle' | 'extend' | null>(null);
+  const [extendCheckoutDate, setExtendCheckoutDate] = useState('');
+
+  const extendBooking = useMutation({
+    mutationFn: (data: { id: string, new_check_out: string }) =>
+      fetchApi(tenant, `/bookings/${data.id}/extend`, {
+        method: 'POST',
+        body: JSON.stringify({ new_check_out: data.new_check_out })
+      }),
+    onError: (err: any) => {
+      alert(err?.message || "Failed to extend booking stay");
+    },
+    onSuccess: (updatedBooking: any) => {
+      qc.invalidateQueries({ queryKey: ['bookings', tenant] });
+      if (updatedBooking && updatedBooking.id) {
+        setSelectedBooking(updatedBooking);
+      }
+      setOverdueWorkflowMode(null);
+    }
+  });
+
   const handleCellClick = (roomId: string, date: Date) => {
     // Find room and its base price
     const room = rooms.find((r: any) => r.id === roomId);
@@ -353,6 +374,19 @@ export default function CalendarPage() {
     });
   };
 
+  const isBookingOverdue = (booking: any) => {
+    if (!booking || booking.status !== 'Checked-in') return false;
+    const now = new Date();
+    const nowStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const bOutStr = booking.check_out.split('T')[0];
+
+    if (bOutStr < nowStr) return true;
+    if (bOutStr === nowStr) {
+      return now.getHours() >= 12;
+    }
+    return false;
+  };
+
   const getRoomEffectiveStatus = (room: any, date: Date = today) => {
     const dStr = getLocalDateStr(date);
 
@@ -365,7 +399,10 @@ export default function CalendarPage() {
     });
 
     if (booking) {
-      return booking.status === 'Checked-in' ? 'Occupied' : 'Booked';
+      if (booking.status === 'Checked-in') {
+        return isBookingOverdue(booking) ? 'Overdue Checkout' : 'Occupied';
+      }
+      return 'Booked';
     }
 
     const checkoutBooking = bookings.find((b: any) => {
@@ -376,7 +413,7 @@ export default function CalendarPage() {
     });
 
     if (checkoutBooking) {
-      return 'checking out';
+      return isBookingOverdue(checkoutBooking) ? 'Overdue Checkout' : 'checking out';
     }
 
     return room.housekeeping_status || 'Room Available';
@@ -403,9 +440,18 @@ export default function CalendarPage() {
     const dStr = cellDate.toISOString().split('T')[0];
     return bookings.find((b: any) => {
       if (b.room_id !== roomId) return false;
+      if (b.status === 'Cancelled') return false;
       const bIn = b.check_in.split('T')[0];
       const bOut = b.check_out.split('T')[0];
-      return dStr >= bIn && dStr < bOut;
+
+      // Standard stay match
+      if (dStr >= bIn && dStr < bOut) return true;
+
+      // Overdue stay match: if Checked-in and cellDate is between bOut and today
+      if (b.status === 'Checked-in' && dStr >= bOut && dStr <= todayStr) {
+        return true;
+      }
+      return false;
     });
   };
 
@@ -568,11 +614,24 @@ export default function CalendarPage() {
                         </div>
                         {dates.map((date, i) => {
                           const booking = getBookingForCell(room.id, date);
+                          const isOverdue = booking && isBookingOverdue(booking);
+
                           return (
                             <div key={i} className="w-32 flex-shrink-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-16 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer" onClick={() => !booking && handleCellClick(room.id, date)}>
                               {booking && (
-                                <div onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }} className={`absolute inset-x-1 inset-y-1 rounded-md shadow-sm border flex items-center justify-center text-xs text-white px-2 overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer hover:opacity-90 transition-opacity ${booking.status === 'Checked-in' ? 'bg-emerald-500 border-emerald-600' : 'bg-[var(--theme-color,#4f46e5)] border-[var(--theme-color,#4f46e5)]'}`}>
-                                  {booking.guest_name}
+                                <div
+                                  onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); setOverdueWorkflowMode(null); }}
+                                  title={isOverdue ? "Overdue Checkout (Expected by 12:00 PM)" : undefined}
+                                  className={`absolute inset-x-1 inset-y-1 rounded-md shadow-sm border flex items-center justify-between text-xs text-white px-2 overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer hover:opacity-90 transition-opacity ${
+                                    isOverdue
+                                      ? 'bg-rose-600 border-rose-700 shadow-md font-bold'
+                                      : booking.status === 'Checked-in'
+                                      ? 'bg-emerald-500 border-emerald-600'
+                                      : 'bg-[var(--theme-color,#4f46e5)] border-[var(--theme-color,#4f46e5)]'
+                                  }`}
+                                >
+                                  <span className="truncate">{booking.guest_name}</span>
+                                  {isOverdue && <AlertTriangle className="w-3.5 h-3.5 text-amber-200 shrink-0 ml-1 animate-pulse" />}
                                 </div>
                               )}
                             </div>
@@ -654,7 +713,7 @@ export default function CalendarPage() {
           </div>
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
-            {['All', 'Room Available', 'Occupied', 'Booked', 'checking out', 'Not Ready', 'Vacant Ready', 'On queue', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Maintenance'].map(status => {
+            {['All', 'Room Available', 'Occupied', 'Overdue Checkout', 'Booked', 'checking out', 'Not Ready', 'Vacant Ready', 'On queue', 'Do Not Disturb', 'Cleaning in progress', 'Sleep out', 'Maintenance'].map(status => {
               const count = status === 'All'
                 ? rooms.length
                 : rooms.filter((r: any) => getRoomEffectiveStatus(r) === status).length;
@@ -663,6 +722,7 @@ export default function CalendarPage() {
                 'All': 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800',
                 'Room Available': 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800',
                 'Occupied': 'text-rose-600 bg-rose-50 dark:bg-rose-900/10',
+                'Overdue Checkout': 'text-amber-800 bg-amber-100 dark:bg-amber-950/60 border-amber-300',
                 'Booked': 'text-pink-600 bg-pink-50 dark:bg-pink-900/10',
                 'checking out': 'text-purple-600 bg-purple-50 dark:bg-purple-900/10',
                 'Not Ready': 'text-orange-500 bg-orange-50 dark:bg-orange-900/10',
@@ -717,6 +777,7 @@ export default function CalendarPage() {
                         'Room Available': 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800',
                         'Booked': 'text-pink-600 bg-pink-50 dark:bg-pink-900/10',
                         'checking out': 'text-purple-600 bg-purple-50 dark:bg-purple-900/10',
+                        'Overdue Checkout': 'text-amber-800 bg-amber-100 dark:bg-amber-950/60 border-amber-300',
                         'Not Ready': 'text-orange-600 bg-orange-50 dark:bg-orange-900/10',
                         'Vacant Ready': 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/10',
                         'On queue': 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/10',
@@ -731,6 +792,7 @@ export default function CalendarPage() {
                         'Room Available': CheckCircle,
                         'Booked': BedDouble,
                         'checking out': LogOut,
+                        'Overdue Checkout': AlertTriangle,
                         'Not Ready': AlertTriangle,
                         'Vacant Ready': CheckCircle,
                         'On queue': Brush,
@@ -752,11 +814,12 @@ export default function CalendarPage() {
                           <select
                             className={`w-full text-[10px] font-black uppercase tracking-tight p-1.5 rounded-md border-none cursor-pointer focus:ring-0 transition-colors ${statusColors[status]}`}
                             value={status}
-                            disabled={status === 'Occupied' || status === 'Booked' || status === 'checking out'}
+                            disabled={status === 'Occupied' || status === 'Booked' || status === 'checking out' || status === 'Overdue Checkout'}
                             onChange={(e) => updateHousekeeping.mutate({ id: room.id, status: e.target.value })}
                           >
                             <option value="Room Available">Room Available</option>
                             <option value="Occupied">Occupied</option>
+                            <option value="Overdue Checkout">Overdue Checkout</option>
                             <option value="Booked">Booked</option>
                             <option value="checking out">Checking Out</option>
                             <option value="Not Ready">Not Ready</option>
@@ -1081,6 +1144,135 @@ export default function CalendarPage() {
             </button>
           </div>
           <div className="space-y-4">
+            {isBookingOverdue(selectedBooking) && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
+                  <span>Overstay Action Required (Expected by 12:00 PM)</span>
+                </div>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Guest checkout is overdue. Settle outstanding balance or extend the stay.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setOverdueWorkflowMode(overdueWorkflowMode === 'settle' ? null : 'settle')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-extrabold transition-all border ${
+                      overdueWorkflowMode === 'settle'
+                        ? 'bg-amber-600 text-white border-amber-700 shadow-sm'
+                        : 'bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100/50'
+                    }`}
+                  >
+                    Settle & Check Out
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (overdueWorkflowMode !== 'extend') {
+                        const currentOut = new Date(selectedBooking.check_out);
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        const nextDate = currentOut > tomorrow ? currentOut : tomorrow;
+                        nextDate.setDate(nextDate.getDate() + 1);
+                        const year = nextDate.getFullYear();
+                        const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+                        const day = String(nextDate.getDate()).padStart(2, '0');
+                        setExtendCheckoutDate(`${year}-${month}-${day}`);
+                      }
+                      setOverdueWorkflowMode(overdueWorkflowMode === 'extend' ? null : 'extend');
+                    }}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-extrabold transition-all border ${
+                      overdueWorkflowMode === 'extend'
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                        : 'bg-white dark:bg-zinc-900 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50'
+                    }`}
+                  >
+                    Extend Stay
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {overdueWorkflowMode === 'extend' && (
+              <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded-2xl space-y-3">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">Extend Stay Duration</h4>
+                <div>
+                  <span className="text-[10px] text-zinc-500 font-bold block mb-1">New Checkout Date</span>
+                  <input
+                    type="date"
+                    min={selectedBooking.check_out.split('T')[0]}
+                    value={extendCheckoutDate}
+                    onChange={e => setExtendCheckoutDate(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                {(() => {
+                  if (!extendCheckoutDate) return null;
+                  const currentOut = new Date(selectedBooking.check_out.split('T')[0]);
+                  const newOut = new Date(extendCheckoutDate);
+                  const diff = newOut.getTime() - currentOut.getTime();
+                  const extraNights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+
+                  const room = rooms.find((r: any) => r.id === selectedBooking.room_id);
+                  const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
+                  const basePrice = roomType?.base_price || 0;
+                  const extraAmount = extraNights * basePrice;
+                  const newTotal = Number(selectedBooking.total_price || 0) + extraAmount;
+
+                  const isConflict = isRoomBookedExceptSelf(
+                    selectedBooking.room_id,
+                    selectedBooking.check_out.split('T')[0],
+                    extendCheckoutDate,
+                    selectedBooking.id
+                  );
+
+                  return (
+                    <div className="space-y-3 pt-1">
+                      {isConflict ? (
+                        <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl text-[11px] text-rose-800 dark:text-rose-300 font-semibold space-y-1">
+                          <p className="flex items-center gap-1.5 font-bold">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Overbooking Warning
+                          </p>
+                          <p>Room is reserved by another guest on selected extension dates. Please reassign the booking room first.</p>
+                          <button
+                            onClick={() => {
+                              setIsEditBookingMode(true);
+                              setOverdueWorkflowMode(null);
+                            }}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 underline font-bold pt-1 block"
+                          >
+                            Reassign Room in Edit Mode
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-xs space-y-1">
+                          <div className="flex justify-between text-zinc-500">
+                            <span>Extension Nights:</span>
+                            <span className="font-bold text-zinc-800 dark:text-zinc-200">+{extraNights} Night(s)</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-500">
+                            <span>Room Rate:</span>
+                            <span className="font-bold text-zinc-800 dark:text-zinc-200">₹{basePrice}/night</span>
+                          </div>
+                          <div className="flex justify-between text-indigo-600 dark:text-indigo-400 font-bold pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                            <span>New Total Bill:</span>
+                            <span>₹{newTotal} (+₹{extraAmount})</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => extendBooking.mutate({ id: selectedBooking.id, new_check_out: new Date(extendCheckoutDate).toISOString() })}
+                        disabled={isConflict || extendBooking.isPending || !extendCheckoutDate}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
+                      >
+                        {extendBooking.isPending ? 'Extending...' : 'Confirm Stay Extension'}
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div><p className="text-sm text-zinc-500">Guest Name</p><p className="font-semibold text-lg">{selectedBooking.guest_name}</p></div>
             
             <div>

@@ -20,6 +20,7 @@ interface DashboardStats {
   cleaning_rooms: number;
   today_revenue: number;
   total_bookings: number;
+  overdue_departures?: number;
 }
 
 export default function DashboardPage() {
@@ -38,7 +39,15 @@ export default function DashboardPage() {
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1 capitalize">{tenant} Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight mb-1 capitalize">{tenant} Dashboard</h1>
+            {(stats?.overdue_departures ?? 0) > 0 && (
+              <Link href={`${basePath}/admin/calendar`} className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold text-xs rounded-full hover:scale-105 transition-all shadow-sm">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse" />
+                <span>{stats?.overdue_departures} Overdue Departure{(stats?.overdue_departures ?? 0) > 1 ? 's' : ''}</span>
+              </Link>
+            )}
+          </div>
           <p className="text-zinc-500">Live operational overview & revenue statistics</p>
         </div>
 

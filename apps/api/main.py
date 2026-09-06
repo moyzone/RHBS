@@ -105,6 +105,9 @@ class BookingUpdate(BaseModel):
     room_id: Optional[str] = None
     total_price: Optional[float] = None
 
+class BookingExtend(BaseModel):
+    new_check_out: str
+
 class InvoiceItem(BaseModel):
     description: str
     amount: float
@@ -268,6 +271,12 @@ def get_dashboard_stats(context: dict = Depends(get_user_context), db: Session =
 
     total_bookings = db.query(Booking).count()
 
+    now = datetime.utcnow()
+    overdue_departures = db.query(Booking).filter(
+        Booking.status == "Checked-in",
+        Booking.check_out <= now
+    ).count()
+
     return {
         "checkins_today": checkins_today,
         "occupancy_rate": occupancy_rate,
@@ -278,7 +287,8 @@ def get_dashboard_stats(context: dict = Depends(get_user_context), db: Session =
         "clean_rooms": clean_rooms,
         "cleaning_rooms": cleaning_rooms,
         "today_revenue": today_revenue,
-        "total_bookings": total_bookings
+        "total_bookings": total_bookings,
+        "overdue_departures": overdue_departures
     }
 
 @app.get("/api/room-types")
@@ -535,6 +545,48 @@ def update_booking(booking_id: str, req: BookingUpdate, context: dict = Depends(
     if req.total_price is not None:
         booking.total_price = req.total_price
         
+    db.commit()
+    booking_with_payments = db.query(Booking).options(joinedload(Booking.payments)).filter(Booking.id == booking_id).first()
+    return booking_with_payments
+
+@app.post("/api/bookings/{booking_id}/extend")
+def extend_booking(booking_id: str, req: BookingExtend, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+    set_rls_context(db, context["tenant_id"])
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    new_checkout_dt = datetime.fromisoformat(req.new_check_out.replace("Z", "+00:00"))
+    if new_checkout_dt <= booking.check_out:
+        raise HTTPException(400, "New checkout date must be after current checkout date")
+
+    # Conflict check for requested room during extension period
+    conflicting = db.query(Booking).filter(
+        Booking.tenant_id == context["tenant_id"],
+        Booking.room_id == booking.room_id,
+        Booking.id != booking_id,
+        Booking.status.in_(["Confirmed", "Checked-in"]),
+        Booking.check_in < new_checkout_dt,
+        Booking.check_out > booking.check_out
+    ).first()
+
+    if conflicting:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Room is already reserved by guest '{conflicting.guest_name}' on the requested extension dates."
+        )
+
+    # Calculate additional price
+    diff_seconds = (new_checkout_dt - booking.check_out).total_seconds()
+    extra_nights = max(1, int(round(diff_seconds / (24 * 3600))))
+
+    room = db.query(Room).filter(Room.id == booking.room_id).first()
+    room_type = db.query(RoomType).filter(RoomType.id == room.room_type_id).first() if room else None
+    base_price = room_type.base_price if room_type else 0.0
+
+    booking.check_out = new_checkout_dt
+    booking.total_price = (booking.total_price or 0.0) + (extra_nights * base_price)
+
     db.commit()
     booking_with_payments = db.query(Booking).options(joinedload(Booking.payments)).filter(Booking.id == booking_id).first()
     return booking_with_payments
