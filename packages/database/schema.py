@@ -123,6 +123,9 @@ class Booking(Base):
     guest_name = Column(String, nullable=False)
     guest_contact = Column(String, nullable=True)
     guest_email = Column(String, nullable=True)
+    guest_country = Column(String, nullable=True, default="India")
+    guest_address = Column(String, nullable=True)
+    guest_pincode = Column(String, nullable=True)
     
     check_in = Column(DateTime, nullable=False)
     check_out = Column(DateTime, nullable=False)
@@ -177,6 +180,9 @@ class Guest(Base):
     name = Column(String, nullable=False)
     email = Column(String, nullable=True)
     phone = Column(String, nullable=False)
+    country = Column(String, nullable=True, default="India")
+    address = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
     id_proof_image_url = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 

@@ -12,9 +12,10 @@ def receive_after_begin(session, transaction, connection):
     Automatically sets the PostgreSQL RLS context whenever a new transaction starts.
     We retrieve the tenant_id from the session's info dictionary.
     """
-    tenant_id = session.info.get("tenant_id")
-    if tenant_id:
-        connection.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
+    if connection.dialect.name == "postgresql":
+        tenant_id = session.info.get("tenant_id")
+        if tenant_id:
+            connection.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
 
 def get_db():
     db = SessionLocal()
@@ -29,6 +30,11 @@ def set_rls_context(session, tenant_id: str):
     This triggers the 'after_begin' event and handles transaction boundaries.
     """
     session.info["tenant_id"] = tenant_id
-    # Force a re-apply if a transaction is already active
-    session.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
+    # Force a re-apply if a transaction is already active on PostgreSQL
+    try:
+        bind = session.get_bind()
+        if bind and bind.dialect.name == "postgresql":
+            session.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
+    except Exception:
+        pass
 

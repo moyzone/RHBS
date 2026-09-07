@@ -64,6 +64,9 @@ class BookingCreate(BaseModel):
     room_id: str
     guest_name: str
     guest_contact: Optional[str]
+    guest_country: Optional[str] = "India"
+    guest_address: Optional[str] = None
+    guest_pincode: Optional[str] = None
     check_in: str
     check_out: str
     total_price: float
@@ -416,14 +419,51 @@ def get_bookings(context: dict = Depends(get_user_context), db: Session = Depend
 @app.post("/api/bookings")
 def create_booking(req: BookingCreate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
+    
+    new_check_in = datetime.fromisoformat(req.check_in.replace("Z", "").split("+")[0])
+    new_check_out = datetime.fromisoformat(req.check_out.replace("Z", "").split("+")[0])
+
+    if new_check_out <= new_check_in:
+        raise HTTPException(status_code=400, detail="Checkout date must be after check-in date")
+
+    # Housekeeping status check
+    room = db.query(Room).filter(Room.id == req.room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    allowed_statuses = ["Room Available", "Vacant Ready", None, ""]
+    if room.housekeeping_status and room.housekeeping_status not in allowed_statuses:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Room '{room.name}' is currently '{room.housekeeping_status}' and cannot be reserved."
+        )
+
+    # Fail-safe backend collision check: prevent room overlap for active bookings
+    overlapping = db.query(Booking).filter(
+        Booking.tenant_id == context["tenant_id"],
+        Booking.room_id == req.room_id,
+        Booking.status.notin_(["Cancelled", "cancelled"]),
+        Booking.check_in < new_check_out,
+        Booking.check_out > new_check_in
+    ).first()
+
+    if overlapping:
+        raise HTTPException(
+            status_code=409,
+            detail="Room is already reserved for the selected date range"
+        )
+
     new_booking = Booking(
         id=f"b_{uuid.uuid4().hex[:8]}",
         tenant_id=context["tenant_id"],
         room_id=req.room_id,
         guest_name=req.guest_name,
         guest_contact=req.guest_contact,
-        check_in=datetime.fromisoformat(req.check_in.replace("Z", "+00:00")),
-        check_out=datetime.fromisoformat(req.check_out.replace("Z", "+00:00")),
+        guest_country=req.guest_country,
+        guest_address=req.guest_address,
+        guest_pincode=req.guest_pincode,
+        check_in=new_check_in,
+        check_out=new_check_out,
         status="Confirmed",
         total_price=req.total_price,
         booking_source=req.booking_source,
@@ -436,6 +476,9 @@ def create_booking(req: BookingCreate, context: dict = Depends(get_user_context)
     if guest:
         guest.name = req.guest_name
         if req.guest_email: guest.email = req.guest_email
+        if req.guest_country: guest.country = req.guest_country
+        if req.guest_address: guest.address = req.guest_address
+        if req.guest_pincode: guest.pincode = req.guest_pincode
         if req.guest_id_proof_image_url: guest.id_proof_image_url = req.guest_id_proof_image_url
     else:
         guest = Guest(
@@ -444,6 +487,9 @@ def create_booking(req: BookingCreate, context: dict = Depends(get_user_context)
             name=req.guest_name,
             phone=req.guest_contact,
             email=req.guest_email,
+            country=req.guest_country,
+            address=req.guest_address,
+            pincode=req.guest_pincode,
             id_proof_image_url=req.guest_id_proof_image_url
         )
         db.add(guest)
@@ -533,9 +579,28 @@ def update_booking(booking_id: str, req: BookingUpdate, context: dict = Depends(
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(404, "Booking not found")
-    
+
+    target_room_id = req.room_id if req.room_id is not None else booking.room_id
+    target_check_out = datetime.fromisoformat(req.check_out.replace("Z", "+00:00")) if req.check_out is not None else booking.check_out
+
+    if req.room_id is not None or req.check_out is not None:
+        overlapping = db.query(Booking).filter(
+            Booking.tenant_id == context["tenant_id"],
+            Booking.room_id == target_room_id,
+            Booking.id != booking_id,
+            Booking.status.notin_(["Cancelled", "cancelled"]),
+            Booking.check_in < target_check_out,
+            Booking.check_out > booking.check_in
+        ).first()
+
+        if overlapping:
+            raise HTTPException(
+                status_code=409,
+                detail="Room is already reserved for the selected date range"
+            )
+
     if req.check_out is not None:
-        booking.check_out = datetime.fromisoformat(req.check_out.replace("Z", "+00:00"))
+        booking.check_out = target_check_out
     if req.booking_source is not None:
         booking.booking_source = req.booking_source
     if req.payment_method is not None:
