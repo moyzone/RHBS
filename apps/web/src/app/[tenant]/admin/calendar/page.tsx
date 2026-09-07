@@ -26,6 +26,93 @@ const STATUS_MEANINGS: Record<string, string> = {
   'Maintenance': 'Room under maintenance.'
 };
 
+export interface CountryOption {
+  code: string;
+  name: string;
+  flag: string;
+  dialCode: string;
+  pinPlaceholder: string;
+  pinErrorMessage: string;
+  pinRegex: RegExp;
+  phoneDigitsMsg: string;
+}
+
+export const COUNTRIES: CountryOption[] = [
+  { code: 'IN', name: 'India', flag: '🇮🇳', dialCode: '+91', pinPlaceholder: 'e.g. 110001 (6 digits)', pinErrorMessage: 'Enter a valid 6-digit numeric PIN code for India', pinRegex: /^\d{6}$/, phoneDigitsMsg: '10 digits starting with 6-9' },
+  { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1', pinPlaceholder: 'e.g. 90210 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit US ZIP code', pinRegex: /^\d{5}(-\d{4})?$/, phoneDigitsMsg: '10 digits' },
+  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', dialCode: '+44', pinPlaceholder: 'e.g. SW1A 1AA', pinErrorMessage: 'Enter a valid UK Postal Code (e.g. SW1A 1AA)', pinRegex: /^[A-Z0-9\s]{4,8}$/i, phoneDigitsMsg: '10 digits' },
+  { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪', dialCode: '+971', pinPlaceholder: 'Area / P.O. Box', pinErrorMessage: 'Enter valid UAE Postal / Area code', pinRegex: /^[0-9A-Z\s-]{3,10}$/i, phoneDigitsMsg: '9 digits' },
+  { code: 'AU', name: 'Australia', flag: '🇦🇺', dialCode: '+61', pinPlaceholder: 'e.g. 2000 (4 digits)', pinErrorMessage: 'Enter a valid 4-digit Australian Postcode', pinRegex: /^\d{4}$/, phoneDigitsMsg: '9 digits' },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦', dialCode: '+1', pinPlaceholder: 'e.g. K1A 0B1', pinErrorMessage: 'Enter a valid Canadian Postal Code', pinRegex: /^[A-Z]\d[A-Z]\s?\d[A-Z]\d$/i, phoneDigitsMsg: '10 digits' },
+  { code: 'DE', name: 'Germany', flag: '🇩🇪', dialCode: '+49', pinPlaceholder: 'e.g. 10115 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit German PLZ', pinRegex: /^\d{5}$/, phoneDigitsMsg: '10 digits' },
+  { code: 'SG', name: 'Singapore', flag: '🇸🇬', dialCode: '+65', pinPlaceholder: 'e.g. 018956 (6 digits)', pinErrorMessage: 'Enter a valid 6-digit Singapore Postal Code', pinRegex: /^\d{6}$/, phoneDigitsMsg: '8 digits' },
+  { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦', dialCode: '+966', pinPlaceholder: 'e.g. 12211 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit Saudi Postal Code', pinRegex: /^\d{5}$/, phoneDigitsMsg: '9 digits' },
+  { code: 'NP', name: 'Nepal', flag: '🇳🇵', dialCode: '+977', pinPlaceholder: 'e.g. 44600 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit Nepal Postal Code', pinRegex: /^\d{5}$/, phoneDigitsMsg: '10 digits' },
+  { code: 'LK', name: 'Sri Lanka', flag: '🇱🇰', dialCode: '+94', pinPlaceholder: 'e.g. 00100 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit Sri Lanka Postal Code', pinRegex: /^\d{5}$/, phoneDigitsMsg: '9 digits' },
+  { code: 'BD', name: 'Bangladesh', flag: '🇧🇩', dialCode: '+880', pinPlaceholder: 'e.g. 1000 (4 digits)', pinErrorMessage: 'Enter a valid 4-digit Bangladesh Postal Code', pinRegex: /^\d{4}$/, phoneDigitsMsg: '10 digits' },
+  { code: 'FR', name: 'France', flag: '🇫🇷', dialCode: '+33', pinPlaceholder: 'e.g. 75001 (5 digits)', pinErrorMessage: 'Enter a valid 5-digit French Code Postal', pinRegex: /^\d{5}$/, phoneDigitsMsg: '9 digits' },
+  { code: 'JP', name: 'Japan', flag: '🇯🇵', dialCode: '+81', pinPlaceholder: 'e.g. 100-0001', pinErrorMessage: 'Enter a valid Japanese Postal Code (e.g. 100-0001)', pinRegex: /^\d{3}-?\d{4}$/, phoneDigitsMsg: '10 digits' },
+  { code: 'CN', name: 'China', flag: '🇨🇳', dialCode: '+86', pinPlaceholder: 'e.g. 100000 (6 digits)', pinErrorMessage: 'Enter a valid 6-digit China Postal Code', pinRegex: /^\d{6}$/, phoneDigitsMsg: '11 digits' },
+  { code: 'OTHER', name: 'Other International', flag: '🌐', dialCode: '+', pinPlaceholder: 'ZIP / Postal Code', pinErrorMessage: 'Enter a valid Postal Code (3-10 characters)', pinRegex: /^[0-9A-Z\s-]{3,10}$/i, phoneDigitsMsg: '7-15 digits' },
+];
+
+export const validatePhoneNumber = (phone: string, countryCode: string): string | null => {
+  if (!phone || !phone.trim()) return "Mandatory: Contact number is required";
+  const digitsOnly = phone.replace(/\D/g, '');
+  
+  if (countryCode === 'IN') {
+    let rawNumber = digitsOnly;
+    if (rawNumber.startsWith('91') && rawNumber.length > 10) {
+      rawNumber = rawNumber.slice(2);
+    }
+    if (rawNumber.length !== 10) {
+      return "Invalid: Indian contact number must be exactly 10 digits (e.g. +91 9876543210)";
+    }
+    if (!/^[6-9]/.test(rawNumber)) {
+      return "Invalid: Indian mobile number must start with 6, 7, 8, or 9";
+    }
+    return null;
+  }
+
+  if (countryCode === 'US' || countryCode === 'CA') {
+    let rawNumber = digitsOnly;
+    if (rawNumber.startsWith('1') && rawNumber.length > 10) {
+      rawNumber = rawNumber.slice(1);
+    }
+    if (rawNumber.length !== 10) {
+      return "Invalid: Contact number must be exactly 10 digits for US/Canada";
+    }
+    return null;
+  }
+
+  if (digitsOnly.length < 6 || digitsOnly.length > 15) {
+    return "Invalid: Contact number must contain between 7 and 15 digits (ITU E.164 standard)";
+  }
+
+  return null;
+};
+
+export const validatePinCode = (pincode: string, countryCode: string): string | null => {
+  if (!pincode || !pincode.trim()) return "Mandatory: Postal / PIN Code is required";
+  const trimmed = pincode.trim();
+  const country = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[COUNTRIES.length - 1];
+  if (!country.pinRegex.test(trimmed)) {
+    return country.pinErrorMessage;
+  }
+  return null;
+};
+
+export const validateAddress = (address: string): string | null => {
+  if (!address || !address.trim()) return "Mandatory: Street address is required";
+  if (address.trim().length < 5) return "Invalid: Street address must be at least 5 characters long";
+  return null;
+};
+
+export const validateGuestName = (name: string): string | null => {
+  if (!name || !name.trim()) return "Mandatory: Full Legal Name is required";
+  return null;
+};
+
 export default function CalendarPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -51,8 +138,11 @@ export default function CalendarPage() {
 
   const [newBooking, setNewBooking] = useState({
     guest_name: '',
-    guest_contact: '',
+    guest_country: 'IN',
+    guest_contact: '+91 ',
     guest_email: '',
+    guest_address: '',
+    guest_pincode: '',
     guest_id_proof_image_url: '',
     total_price: '' as number | string,
     amount_paid: '' as number | string,
@@ -60,10 +150,15 @@ export default function CalendarPage() {
     booking_source: 'Offline',
     check_out: '' // Added for multi-day support
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [hasSubmittedModal, setHasSubmittedModal] = useState(false);
   const [uploadingId, setUploadingId] = useState(false);
   const [isFullPayment, setIsFullPayment] = useState(true);
   const createBooking = useMutation({
     mutationFn: (b: any) => fetchApi(tenant, '/bookings', { method: 'POST', body: JSON.stringify(b) }),
+    onError: (err: any) => {
+      alert(err?.message || "Room is already reserved for the selected date range");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['bookings', tenant] }); setBookingModal({ isOpen: false, roomId: '', date: null }); }
   });
 
@@ -241,9 +336,80 @@ export default function CalendarPage() {
     }
   });
 
+  const handleCountryChange = (countryCode: string) => {
+    const selectedC = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
+    const oldC = COUNTRIES.find(c => c.code === newBooking.guest_country);
+    
+    let newContact = newBooking.guest_contact;
+    if (!newContact || (oldC && newContact.startsWith(oldC.dialCode))) {
+      const restDigits = oldC ? newContact.slice(oldC.dialCode.length).trim() : '';
+      newContact = selectedC.dialCode + (restDigits ? ' ' + restDigits : ' ');
+    } else if (!newContact.includes('+')) {
+      newContact = selectedC.dialCode + ' ' + newContact;
+    }
+    
+    setNewBooking(prev => ({
+      ...prev,
+      guest_country: countryCode,
+      guest_contact: newContact
+    }));
+    if (formErrors.guest_country) setFormErrors(prev => ({ ...prev, guest_country: '' }));
+  };
+
+  const handlePhoneChange = (val: string) => {
+    const sanitized = val.replace(/[^\d+\s-]/g, '');
+    setNewBooking(prev => ({ ...prev, guest_contact: sanitized }));
+    if (formErrors.guest_contact) setFormErrors(prev => ({ ...prev, guest_contact: '' }));
+  };
+
+  const handlePinChange = (val: string) => {
+    let sanitized = val;
+    if (newBooking.guest_country === 'IN') {
+      sanitized = val.replace(/\D/g, '').slice(0, 6);
+    } else if (['US', 'SG', 'DE', 'NP', 'LK', 'BD', 'FR', 'JP', 'CN', 'AU'].includes(newBooking.guest_country)) {
+      sanitized = val.replace(/[^0-9\s-]/g, '').slice(0, 10);
+    } else {
+      sanitized = val.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 10);
+    }
+    setNewBooking(prev => ({ ...prev, guest_pincode: sanitized }));
+    if (formErrors.guest_pincode) setFormErrors(prev => ({ ...prev, guest_pincode: '' }));
+  };
+
+  const validateBookingForm = () => {
+    const errors: Record<string, string> = {};
+    
+    const nameErr = validateGuestName(newBooking.guest_name);
+    if (nameErr) errors.guest_name = nameErr;
+
+    if (!newBooking.guest_country) errors.guest_country = "Mandatory: Country selection is required";
+
+    const phoneErr = validatePhoneNumber(newBooking.guest_contact, newBooking.guest_country);
+    if (phoneErr) errors.guest_contact = phoneErr;
+
+    const addrErr = validateAddress(newBooking.guest_address);
+    if (addrErr) errors.guest_address = addrErr;
+
+    const pinErr = validatePinCode(newBooking.guest_pincode, newBooking.guest_country);
+    if (pinErr) errors.guest_pincode = pinErr;
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const isRoomReadyForBooking = (room: any) => {
+    if (!room) return false;
+    const status = room.housekeeping_status;
+    return !status || status === 'Room Available' || status === 'Vacant Ready';
+  };
+
   const handleCellClick = (roomId: string, date: Date) => {
-    // Find room and its base price
+    // Find room and check housekeeping availability
     const room = rooms.find((r: any) => r.id === roomId);
+    if (room && !isRoomReadyForBooking(room)) {
+      alert(`⚠️ Room '${room.name}' is currently under '${room.housekeeping_status || 'Maintenance'}' and cannot be reserved.`);
+      return;
+    }
+
     const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
     const price = roomType?.base_price || 0;
 
@@ -252,8 +418,11 @@ export default function CalendarPage() {
 
     setNewBooking({
       guest_name: '',
-      guest_contact: '',
+      guest_country: 'IN',
+      guest_contact: '+91 ',
       guest_email: '',
+      guest_address: '',
+      guest_pincode: '',
       guest_id_proof_image_url: '',
       total_price: price,
       amount_paid: price,
@@ -261,6 +430,8 @@ export default function CalendarPage() {
       booking_source: 'Offline',
       check_out: nextDay.toISOString().split('T')[0]
     });
+    setFormErrors({});
+    setHasSubmittedModal(false);
     setIsFullPayment(true);
     setRoomSearchTerm('');
     setIsRoomDropdownOpen(false);
@@ -296,6 +467,13 @@ export default function CalendarPage() {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  };
+
+  const getMinCheckoutDate = (checkInDate: Date | null) => {
+    if (!checkInDate) return '';
+    const minDate = new Date(checkInDate);
+    minDate.setDate(minDate.getDate() + 1);
+    return formatDateToInput(minDate);
   };
 
   const handleCheckInChange = (newDateStr: string) => {
@@ -362,12 +540,12 @@ export default function CalendarPage() {
 
   const isRoomBookedForDates = (roomId: string, checkInDate: Date | null, checkOutDateStr: string) => {
     if (!checkInDate || !checkOutDateStr) return false;
-    const newStartStr = checkInDate.toISOString().split('T')[0];
+    const newStartStr = formatDateToInput(checkInDate);
     const newEndStr = checkOutDateStr;
 
     return bookings.some((b: any) => {
       if (b.room_id !== roomId) return false;
-      if (b.status === 'Cancelled' || b.status === 'Checked-out') return false;
+      if (b.status === 'Cancelled' || b.status === 'cancelled' || b.status === 'Checked-out') return false;
       const bIn = b.check_in.split('T')[0];
       const bOut = b.check_out.split('T')[0];
       return newStartStr < bOut && newEndStr > bIn;
@@ -617,7 +795,22 @@ export default function CalendarPage() {
                           const isOverdue = booking && isBookingOverdue(booking);
 
                           return (
-                            <div key={i} className="w-32 flex-shrink-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-16 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer" onClick={() => !booking && handleCellClick(room.id, date)}>
+                            <div
+                              key={i}
+                              className={`w-32 flex-shrink-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-16 transition-colors ${
+                                booking
+                                  ? 'bg-zinc-50/80 dark:bg-zinc-950/50 cursor-pointer'
+                                  : 'hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer'
+                              }`}
+                              onClick={() => {
+                                if (booking) {
+                                  setSelectedBooking(booking);
+                                  setOverdueWorkflowMode(null);
+                                } else {
+                                  handleCellClick(room.id, date);
+                                }
+                              }}
+                            >
                               {booking && (
                                 <div
                                   onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); setOverdueWorkflowMode(null); }}
@@ -922,15 +1115,22 @@ export default function CalendarPage() {
                             const roomType = roomTypes.find((rt: any) => rt.id === r.room_type_id);
                             const isSelected = r.id === bookingModal.roomId;
                             const isBooked = isRoomBookedForDates(r.id, bookingModal.date, newBooking.check_out);
+                            const isReady = isRoomReadyForBooking(r);
+                            const isSelectable = !isBooked && isReady;
 
                             return (
                               <div
                                 key={r.id}
-                                onClick={() => handleRoomChange(r.id)}
-                                className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${isSelected
-                                    ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800'
-                                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent'
-                                  }`}
+                                onClick={() => {
+                                  if (isSelectable) handleRoomChange(r.id);
+                                }}
+                                className={`flex items-center justify-between p-2.5 rounded-xl transition-all ${
+                                  !isSelectable
+                                    ? 'opacity-50 cursor-not-allowed bg-zinc-100 dark:bg-zinc-800/40 border border-transparent'
+                                    : isSelected
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 cursor-pointer'
+                                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent cursor-pointer'
+                                }`}
                               >
                                 <div className="flex items-center gap-3">
                                   <div className={`p-2 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>
@@ -947,11 +1147,15 @@ export default function CalendarPage() {
                                   </div>
                                 </div>
 
-                                {/* Availability Badge */}
+                                {/* Availability & Housekeeping Status Badge */}
                                 <div>
                                   {isBooked ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-0.5 rounded-full">
                                       <AlertTriangle className="w-3 h-3" /> Booked
+                                    </span>
+                                  ) : !isReady ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 rounded-full" title={`Housekeeping Status: ${r.housekeeping_status}`}>
+                                      <AlertTriangle className="w-3 h-3" /> {r.housekeeping_status || 'Not Ready'}
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-0.5 rounded-full">
@@ -982,35 +1186,189 @@ export default function CalendarPage() {
 
             <div className="p-10 space-y-8 max-h-[80vh] overflow-y-auto custom-scrollbar">
               {/* Section 1: Guest Information */}
-              <div className="space-y-4">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 block px-1">Primary Guest Details</label>
-                <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 block">Primary Guest Details</label>
+                  <span className="text-[10px] font-bold text-rose-500">* Mandatory fields</span>
+                </div>
+
+                {/* Row 1: Full Legal Name & Country */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-zinc-500 ml-1">Full Legal Name</span>
-                    <input type="text" placeholder="e.g. John Doe" className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-sm focus:border-indigo-500 outline-none transition-all shadow-sm" value={newBooking.guest_name} onChange={e => setNewBooking({ ...newBooking, guest_name: e.target.value })} />
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Full Legal Name <span className="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. John Doe"
+                      className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_name ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                      value={newBooking.guest_name}
+                      onChange={e => {
+                        setNewBooking({ ...newBooking, guest_name: e.target.value });
+                        if (formErrors.guest_name) setFormErrors({ ...formErrors, guest_name: '' });
+                      }}
+                    />
+                    {hasSubmittedModal && formErrors.guest_name && (
+                      <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {formErrors.guest_name}
+                      </p>
+                    )}
                   </div>
+
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-zinc-500 ml-1">Contact Number</span>
-                    <input type="text" placeholder="+91 0000000000" className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-sm focus:border-indigo-500 outline-none transition-all shadow-sm" value={newBooking.guest_contact} onChange={e => setNewBooking({ ...newBooking, guest_contact: e.target.value })} />
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Country <span className="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        className={`w-full p-4 rounded-2xl font-bold text-sm outline-none appearance-none cursor-pointer transition-all shadow-sm pr-10 ${hasSubmittedModal && formErrors.guest_country ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                        value={newBooking.guest_country}
+                        onChange={e => handleCountryChange(e.target.value)}
+                      >
+                        {COUNTRIES.map(c => (
+                          <option key={c.code} value={c.code} className="py-2 text-zinc-900 bg-white dark:bg-zinc-900 dark:text-zinc-100">
+                            {c.flag} {c.name} ({c.dialCode})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    {hasSubmittedModal && formErrors.guest_country && (
+                      <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {formErrors.guest_country}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-6 mt-4">
+
+                {/* Row 2: Country-Aware Contact Number & Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-zinc-500 ml-1">Email Address</span>
-                    <input type="email" placeholder="guest@example.com" className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-sm focus:border-indigo-500 outline-none transition-all shadow-sm" value={newBooking.guest_email} onChange={e => setNewBooking({ ...newBooking, guest_email: e.target.value })} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-zinc-500 ml-1">Identity Verification</span>
-                    <div className="relative group">
-                      <input type="file" accept="image/*" className="hidden" id="id-photo-upload" onChange={handleIdUpload} />
-                      <label htmlFor="id-photo-upload" className="flex items-center justify-center gap-2 w-full p-4 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl cursor-pointer hover:border-indigo-500 transition-all bg-zinc-50 dark:bg-zinc-950/50 text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                        {uploadingId ? "Syncing..." : newBooking.guest_id_proof_image_url ? <span className="text-emerald-500">ID Sync Active</span> : "Upload ID Proof"}
-                        {newBooking.guest_id_proof_image_url && <CheckCircle className="w-4 h-4 text-emerald-500" />}
-                      </label>
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Contact Number <span className="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={`${COUNTRIES.find(c => c.code === newBooking.guest_country)?.dialCode || '+91'} 0000000000`}
+                        className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_contact ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                        value={newBooking.guest_contact}
+                        onChange={e => handlePhoneChange(e.target.value)}
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg pointer-events-none">
+                        {COUNTRIES.find(c => c.code === newBooking.guest_country)?.flag || '🌐'}
+                      </span>
                     </div>
+                    {hasSubmittedModal && formErrors.guest_contact ? (
+                      <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {formErrors.guest_contact}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] font-medium text-zinc-400 ml-1">
+                        Required Format: {COUNTRIES.find(c => c.code === newBooking.guest_country)?.dialCode} ({COUNTRIES.find(c => c.code === newBooking.guest_country)?.phoneDigitsMsg})
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Email Address <span className="text-zinc-400 font-medium text-[9px]">(Optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="guest@example.com"
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-sm focus:border-indigo-500 outline-none transition-all shadow-sm"
+                      value={newBooking.guest_email}
+                      onChange={e => setNewBooking({ ...newBooking, guest_email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Street Address & Postal Code */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Street / Residential Address <span className="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="House/Flat No., Street, City, Landmark"
+                      className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_address ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                      value={newBooking.guest_address}
+                      onChange={e => {
+                        setNewBooking({ ...newBooking, guest_address: e.target.value });
+                        if (formErrors.guest_address) setFormErrors({ ...formErrors, guest_address: '' });
+                      }}
+                    />
+                    {hasSubmittedModal && formErrors.guest_address && (
+                      <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {formErrors.guest_address}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
+                      Postal / PIN Code <span className="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={COUNTRIES.find(c => c.code === newBooking.guest_country)?.pinPlaceholder || 'PIN Code'}
+                      className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_pincode ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                      value={newBooking.guest_pincode}
+                      onChange={e => handlePinChange(e.target.value)}
+                    />
+                    {hasSubmittedModal && formErrors.guest_pincode && (
+                      <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {formErrors.guest_pincode}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Identity Verification */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[10px] font-bold text-zinc-500 ml-1">Identity Verification / ID Proof</label>
+                  <div className="relative group">
+                    <input type="file" accept="image/*" className="hidden" id="id-photo-upload" onChange={handleIdUpload} />
+                    <label htmlFor="id-photo-upload" className="flex items-center justify-center gap-2 w-full p-4 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl cursor-pointer hover:border-indigo-500 transition-all bg-zinc-50 dark:bg-zinc-950/50 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                      {uploadingId ? "Syncing..." : newBooking.guest_id_proof_image_url ? <span className="text-emerald-500">ID Sync Active</span> : "Upload ID Proof"}
+                      {newBooking.guest_id_proof_image_url && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+                    </label>
                   </div>
                 </div>
               </div>
+
+              {/* Room Housekeeping Warning Banner */}
+              {(() => {
+                const currentRoom = rooms.find((r: any) => r.id === bookingModal.roomId);
+                if (currentRoom && !isRoomReadyForBooking(currentRoom)) {
+                  return (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-200 dark:border-amber-900 rounded-2xl flex items-center gap-3 text-amber-700 dark:text-amber-400 animate-in fade-in slide-in-from-top-2">
+                      <AlertTriangle className="w-5 h-5 shrink-0" />
+                      <div className="text-xs font-extrabold">
+                        ⚠️ Room '{currentRoom.name}' is currently under '{currentRoom.housekeeping_status || 'Maintenance'}' and not ready for reservation.
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Room Availability Warning Banner */}
+              {isRoomBookedForDates(bookingModal.roomId, bookingModal.date, newBooking.check_out) && (
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-200 dark:border-rose-900 rounded-2xl flex items-center gap-3 text-rose-600 dark:text-rose-400 animate-in fade-in slide-in-from-top-2">
+                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                  <div className="text-xs font-extrabold">
+                    ⚠️ Room is already booked for these dates. Please choose another room or adjust check-in/checkout dates.
+                  </div>
+                </div>
+              )}
 
               {/* Section 2: Stays & Dates */}
               <div className="space-y-4">
@@ -1034,7 +1392,7 @@ export default function CalendarPage() {
                     <span className="text-[10px] font-bold text-zinc-500 ml-1">Selection Checkout Date</span>
                     <input
                       type="date"
-                      min={formatDateToInput(bookingModal.date)}
+                      min={getMinCheckoutDate(bookingModal.date)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-sm focus:border-indigo-500 outline-none transition-all shadow-sm"
                       value={newBooking.check_out}
                       onChange={e => handleCheckoutChange(e.target.value)}
@@ -1101,21 +1459,48 @@ export default function CalendarPage() {
 
             <div className="p-8 pt-4 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
               <button onClick={() => setBookingModal({ isOpen: false, roomId: '', date: null })} className="px-8 py-4 font-black text-xs uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-all">Discard</button>
-              <button onClick={() => {
-                createBooking.mutate({
-                  room_id: bookingModal.roomId,
-                  guest_name: newBooking.guest_name,
-                  guest_contact: newBooking.guest_contact,
-                  guest_email: newBooking.guest_email,
-                  guest_id_proof_image_url: newBooking.guest_id_proof_image_url,
-                  total_price: Number(newBooking.total_price || 0),
-                  check_in: bookingModal.date!.toISOString(),
-                  check_out: new Date(newBooking.check_out).toISOString(),
-                  amount_paid: Number(newBooking.amount_paid || 0),
-                  payment_method: newBooking.payment_method,
-                  booking_source: newBooking.booking_source
-                });
-              }} className="px-12 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">Commit Booking</button>
+              {(() => {
+                const currentRoom = rooms.find((r: any) => r.id === bookingModal.roomId);
+                const isCurrentRoomNotReady = currentRoom && !isRoomReadyForBooking(currentRoom);
+                const isCurrentRoomBooked = isRoomBookedForDates(bookingModal.roomId, bookingModal.date, newBooking.check_out);
+                const isBlocked = isCurrentRoomBooked || isCurrentRoomNotReady || createBooking.isPending;
+
+                return (
+                  <button
+                    disabled={isBlocked}
+                    onClick={() => {
+                      if (isBlocked) return;
+                      setHasSubmittedModal(true);
+                      if (!validateBookingForm()) {
+                        return;
+                      }
+                      createBooking.mutate({
+                        room_id: bookingModal.roomId,
+                        guest_name: newBooking.guest_name,
+                        guest_contact: newBooking.guest_contact,
+                        guest_country: newBooking.guest_country,
+                        guest_address: newBooking.guest_address,
+                        guest_pincode: newBooking.guest_pincode,
+                        guest_email: newBooking.guest_email,
+                        guest_id_proof_image_url: newBooking.guest_id_proof_image_url,
+                        total_price: Number(newBooking.total_price || 0),
+                        check_in: bookingModal.date!.toISOString(),
+                        check_out: new Date(newBooking.check_out).toISOString(),
+                        amount_paid: Number(newBooking.amount_paid || 0),
+                        payment_method: newBooking.payment_method,
+                        booking_source: newBooking.booking_source
+                      });
+                    }}
+                    className={`px-12 py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all ${
+                      isBlocked
+                        ? 'bg-zinc-300 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-500 cursor-not-allowed opacity-60 shadow-none'
+                        : 'bg-zinc-900 dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    {createBooking.isPending ? "Committing..." : "Commit Booking"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

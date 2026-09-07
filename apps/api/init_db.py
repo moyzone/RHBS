@@ -14,48 +14,45 @@ def initialize_database():
     print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     
-    print("Applying Row Level Security (RLS) policies...")
-    tables_with_tenant = ['users', 'room_types', 'rooms', 'bookings', 'invoices']
-    
+    print("Applying Row Level Security (RLS) policies and column updates...")
     with engine.connect() as conn:
-        for table in tables_with_tenant:
-            # Enable RLS
-            conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;"))
-            
-            # Drop policy if exists
-            conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {table};"))
-            conn.execute(text(f"DROP POLICY IF EXISTS invoice_public_read ON {table};"))
-            
-            if table == 'invoices':
-                # Invoices use missing_ok=TRUE so unauthenticated requests don't error out
-                conn.execute(text(f"""
-                    CREATE POLICY tenant_isolation_policy ON invoices
-                    FOR ALL
-                    TO PUBLIC
-                    USING (tenant_id = coalesce(current_setting('app.current_tenant_id', TRUE), '___no_tenant___'))
-                    WITH CHECK (tenant_id = coalesce(current_setting('app.current_tenant_id', TRUE), '___no_tenant___'));
-                """))
-                # Additional permissive SELECT-only policy for QR code / public invoice access
-                # The unique invoice UUID acts as the access credential (same as Stripe/Shopify)
-                conn.execute(text("""
-                    CREATE POLICY invoice_public_read ON invoices
-                    FOR SELECT
-                    TO PUBLIC
-                    USING (TRUE);
-                """))
-            else:
-                # Create policy
-                conn.execute(text(f"""
-                    CREATE POLICY tenant_isolation_policy ON {table}
-                    FOR ALL
-                    TO PUBLIC
-                    USING (tenant_id = current_setting('app.current_tenant_id')::VARCHAR);
-                """))
-            
-            # Force RLS for owner
-            conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;"))
-            
-        conn.commit()
+        if engine.name == 'postgresql':
+            conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_country VARCHAR;"))
+            conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_address VARCHAR;"))
+            conn.execute(text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_pincode VARCHAR;"))
+            conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS country VARCHAR;"))
+            conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS address VARCHAR;"))
+            conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS pincode VARCHAR;"))
+            conn.commit()
+
+            tables_with_tenant = ['users', 'room_types', 'rooms', 'bookings', 'invoices']
+            for table in tables_with_tenant:
+                conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;"))
+                conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {table};"))
+                conn.execute(text(f"DROP POLICY IF EXISTS invoice_public_read ON {table};"))
+                if table == 'invoices':
+                    conn.execute(text(f"""
+                        CREATE POLICY tenant_isolation_policy ON invoices
+                        FOR ALL
+                        TO PUBLIC
+                        USING (tenant_id = coalesce(current_setting('app.current_tenant_id', TRUE), '___no_tenant___'))
+                        WITH CHECK (tenant_id = coalesce(current_setting('app.current_tenant_id', TRUE), '___no_tenant___'));
+                    """))
+                    conn.execute(text("""
+                        CREATE POLICY invoice_public_read ON invoices
+                        FOR SELECT
+                        TO PUBLIC
+                        USING (TRUE);
+                    """))
+                else:
+                    conn.execute(text(f"""
+                        CREATE POLICY tenant_isolation_policy ON {table}
+                        FOR ALL
+                        TO PUBLIC
+                        USING (tenant_id = current_setting('app.current_tenant_id')::VARCHAR);
+                    """))
+                conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;"))
+            conn.commit()
 
     print("Seeding dummy data for 'hotelflora' and 'demo'...")
     with Session(engine) as session:
