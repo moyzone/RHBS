@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi, BASE_URL } from '@/lib/api';
-import { Search, User, Mail, Phone, Image as ImageIcon, ExternalLink, Calendar, X } from 'lucide-react';
+import { Search, User, Mail, Phone, Image as ImageIcon, ExternalLink, Calendar, X, MapPin, Globe } from 'lucide-react';
 
 export default function GuestsPage() {
   const params = useParams();
@@ -76,7 +76,7 @@ export default function GuestsPage() {
                 </div>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-3 mb-8">
                 <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
                   <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600"><Phone className="w-4 h-4" /></div>
                   <span className="font-bold">{guest.phone}</span>
@@ -85,6 +85,14 @@ export default function GuestsPage() {
                   <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
                     <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-600"><Mail className="w-4 h-4" /></div>
                     <span className="truncate font-medium">{guest.email}</span>
+                  </div>
+                )}
+                {(guest.address || guest.pincode) && (
+                  <div className="flex items-start gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+                    <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 shrink-0 mt-0.5"><MapPin className="w-4 h-4" /></div>
+                    <span className="font-medium text-xs leading-relaxed">
+                      {guest.address}{guest.pincode ? `, ${guest.pincode}` : ''}{guest.country ? ` (${guest.country})` : ''}
+                    </span>
                   </div>
                 )}
                 <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">

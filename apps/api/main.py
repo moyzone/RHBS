@@ -431,7 +431,7 @@ def create_booking(req: BookingCreate, context: dict = Depends(get_user_context)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    allowed_statuses = ["Room Available", "Vacant Ready", None, ""]
+    allowed_statuses = ["Room Available", "Vacant Ready", "Clean", None, ""]
     if room.housekeeping_status and room.housekeeping_status not in allowed_statuses:
         raise HTTPException(
             status_code=422,
@@ -442,7 +442,7 @@ def create_booking(req: BookingCreate, context: dict = Depends(get_user_context)
     overlapping = db.query(Booking).filter(
         Booking.tenant_id == context["tenant_id"],
         Booking.room_id == req.room_id,
-        Booking.status.notin_(["Cancelled", "cancelled"]),
+        Booking.status.notin_(["Cancelled", "cancelled", "Checked-out", "checked-out"]),
         Booking.check_in < new_check_out,
         Booking.check_out > new_check_in
     ).first()

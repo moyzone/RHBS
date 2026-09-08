@@ -353,13 +353,30 @@ export default function CalendarPage() {
       guest_country: countryCode,
       guest_contact: newContact
     }));
-    if (formErrors.guest_country) setFormErrors(prev => ({ ...prev, guest_country: '' }));
+
+    if (hasSubmittedModal) {
+      const phoneErr = validatePhoneNumber(newContact, countryCode);
+      const pinErr = validatePinCode(newBooking.guest_pincode, countryCode);
+      setFormErrors(prev => ({
+        ...prev,
+        guest_country: '',
+        guest_contact: phoneErr || '',
+        guest_pincode: pinErr || ''
+      }));
+    } else {
+      if (formErrors.guest_country) setFormErrors(prev => ({ ...prev, guest_country: '' }));
+    }
   };
 
   const handlePhoneChange = (val: string) => {
     const sanitized = val.replace(/[^\d+\s-]/g, '');
     setNewBooking(prev => ({ ...prev, guest_contact: sanitized }));
-    if (formErrors.guest_contact) setFormErrors(prev => ({ ...prev, guest_contact: '' }));
+    if (hasSubmittedModal) {
+      const err = validatePhoneNumber(sanitized, newBooking.guest_country);
+      setFormErrors(prev => ({ ...prev, guest_contact: err || '' }));
+    } else if (formErrors.guest_contact) {
+      setFormErrors(prev => ({ ...prev, guest_contact: '' }));
+    }
   };
 
   const handlePinChange = (val: string) => {
@@ -372,7 +389,12 @@ export default function CalendarPage() {
       sanitized = val.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 10);
     }
     setNewBooking(prev => ({ ...prev, guest_pincode: sanitized }));
-    if (formErrors.guest_pincode) setFormErrors(prev => ({ ...prev, guest_pincode: '' }));
+    if (hasSubmittedModal) {
+      const err = validatePinCode(sanitized, newBooking.guest_country);
+      setFormErrors(prev => ({ ...prev, guest_pincode: err || '' }));
+    } else if (formErrors.guest_pincode) {
+      setFormErrors(prev => ({ ...prev, guest_pincode: '' }));
+    }
   };
 
   const validateBookingForm = () => {
@@ -1204,8 +1226,14 @@ export default function CalendarPage() {
                       className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_name ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
                       value={newBooking.guest_name}
                       onChange={e => {
-                        setNewBooking({ ...newBooking, guest_name: e.target.value });
-                        if (formErrors.guest_name) setFormErrors({ ...formErrors, guest_name: '' });
+                        const val = e.target.value;
+                        setNewBooking(prev => ({ ...prev, guest_name: val }));
+                        if (hasSubmittedModal) {
+                          const err = validateGuestName(val);
+                          setFormErrors(prev => ({ ...prev, guest_name: err || '' }));
+                        } else if (formErrors.guest_name) {
+                          setFormErrors(prev => ({ ...prev, guest_name: '' }));
+                        }
                       }}
                     />
                     {hasSubmittedModal && formErrors.guest_name && (
@@ -1299,8 +1327,14 @@ export default function CalendarPage() {
                       className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_address ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
                       value={newBooking.guest_address}
                       onChange={e => {
-                        setNewBooking({ ...newBooking, guest_address: e.target.value });
-                        if (formErrors.guest_address) setFormErrors({ ...formErrors, guest_address: '' });
+                        const val = e.target.value;
+                        setNewBooking(prev => ({ ...prev, guest_address: val }));
+                        if (hasSubmittedModal) {
+                          const err = validateAddress(val);
+                          setFormErrors(prev => ({ ...prev, guest_address: err || '' }));
+                        } else if (formErrors.guest_address) {
+                          setFormErrors(prev => ({ ...prev, guest_address: '' }));
+                        }
                       }}
                     />
                     {hasSubmittedModal && formErrors.guest_address && (
