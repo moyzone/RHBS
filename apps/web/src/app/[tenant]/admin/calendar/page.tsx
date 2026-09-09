@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
+import { isValidPhoneNumber, parsePhoneNumberFromString, getCountryCallingCode, AsYouType, CountryCode } from 'libphonenumber-js';
 import {
   X, Edit2, Check, Search, ChevronLeft, ChevronRight,
   Calendar as CalendarIcon, ChevronDown, CreditCard, LogIn, LogOut,
@@ -58,38 +59,101 @@ export const COUNTRIES: CountryOption[] = [
 
 export const validatePhoneNumber = (phone: string, countryCode: string): string | null => {
   if (!phone || !phone.trim()) return "Mandatory: Contact number is required";
-  const digitsOnly = phone.replace(/\D/g, '');
   
-  if (countryCode === 'IN') {
-    let rawNumber = digitsOnly;
-    if (rawNumber.startsWith('91') && rawNumber.length > 10) {
-      rawNumber = rawNumber.slice(2);
-    }
-    if (rawNumber.length !== 10) {
-      return "Invalid: Indian contact number must be exactly 10 digits (e.g. +91 9876543210)";
-    }
-    if (!/^[6-9]/.test(rawNumber)) {
-      return "Invalid: Indian mobile number must start with 6, 7, 8, or 9";
+  const cc = (countryCode && countryCode !== 'OTHER') ? (countryCode as CountryCode) : undefined;
+  
+  try {
+    const isValid = cc ? isValidPhoneNumber(phone, cc) : isValidPhoneNumber(phone);
+    if (!isValid) {
+      const cObj = COUNTRIES.find(c => c.code === countryCode);
+      const cName = cObj ? cObj.name : 'selected country';
+      return `Invalid contact number for ${cName}`;
     }
     return null;
+  } catch (err) {
+    return "Invalid contact number format";
   }
+};
 
-  if (countryCode === 'US' || countryCode === 'CA') {
-    let rawNumber = digitsOnly;
-    if (rawNumber.startsWith('1') && rawNumber.length > 10) {
-      rawNumber = rawNumber.slice(1);
+export const getCountryMaxDigits = (countryCode: string): number => {
+  const maxMap: Record<string, number> = {
+    IN: 10,
+    US: 10,
+    GB: 10,
+    AE: 9,
+    AU: 9,
+    CA: 10,
+    DE: 11,
+    SG: 8,
+    SA: 9,
+    NP: 10,
+    LK: 9,
+    BD: 10,
+    FR: 9,
+    JP: 10,
+    CN: 11,
+  };
+  return maxMap[countryCode] || 15;
+};
+
+export const enforceCountryPhoneLengthAndFormat = (
+  rawInput: string,
+  countryCode: string
+): { formattedPhone: string; activeCountry: string; cleanDigits: string } => {
+  let activeCountry = countryCode;
+  let trimmed = rawInput.trim();
+
+  // If user pasted an international number starting with +
+  if (trimmed.startsWith('+')) {
+    const parsedPasted = parsePhoneNumberFromString(trimmed);
+    if (parsedPasted && parsedPasted.country) {
+      activeCountry = parsedPasted.country;
+      const cc = activeCountry as CountryCode;
+      const cleanDigits = (parsedPasted.nationalNumber || '').slice(0, getCountryMaxDigits(activeCountry));
+      let nationalPhone = cleanDigits;
+      try {
+        const formatter = new AsYouType(cc);
+        nationalPhone = formatter.input(cleanDigits);
+      } catch (e) {}
+      return {
+        formattedPhone: nationalPhone,
+        activeCountry,
+        cleanDigits
+      };
     }
-    if (rawNumber.length !== 10) {
-      return "Invalid: Contact number must be exactly 10 digits for US/Canada";
+  }
+
+  const cc = (activeCountry && activeCountry !== 'OTHER') ? (activeCountry as CountryCode) : undefined;
+
+  let callingCodeDigits = '';
+  try {
+    if (cc) callingCodeDigits = getCountryCallingCode(cc);
+  } catch (e) {}
+
+  let cleanDigits = rawInput.replace(/\D/g, '');
+  const maxDigits = getCountryMaxDigits(activeCountry);
+
+  if (callingCodeDigits && cleanDigits.startsWith(callingCodeDigits) && cleanDigits.length > maxDigits) {
+    cleanDigits = cleanDigits.slice(callingCodeDigits.length);
+  }
+
+  if (cleanDigits.length > maxDigits) {
+    cleanDigits = cleanDigits.slice(0, maxDigits);
+  }
+
+  let nationalPhone = cleanDigits;
+  try {
+    if (cc) {
+      const formatter = new AsYouType(cc);
+      nationalPhone = formatter.input(cleanDigits);
     }
-    return null;
-  }
+  } catch (e) {}
 
-  if (digitsOnly.length < 6 || digitsOnly.length > 15) {
-    return "Invalid: Contact number must contain between 7 and 15 digits (ITU E.164 standard)";
-  }
-
-  return null;
+  return {
+    formattedPhone: nationalPhone,
+    activeCountry,
+    cleanDigits
+  };
 };
 
 export const validatePinCode = (pincode: string, countryCode: string): string | null => {
@@ -139,7 +203,7 @@ export default function CalendarPage() {
   const [newBooking, setNewBooking] = useState({
     guest_name: '',
     guest_country: 'IN',
-    guest_contact: '+91 ',
+    guest_contact: '',
     guest_email: '',
     guest_address: '',
     guest_pincode: '',
@@ -337,26 +401,17 @@ export default function CalendarPage() {
   });
 
   const handleCountryChange = (countryCode: string) => {
-    const selectedC = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
-    const oldC = COUNTRIES.find(c => c.code === newBooking.guest_country);
-    
-    let newContact = newBooking.guest_contact;
-    if (!newContact || (oldC && newContact.startsWith(oldC.dialCode))) {
-      const restDigits = oldC ? newContact.slice(oldC.dialCode.length).trim() : '';
-      newContact = selectedC.dialCode + (restDigits ? ' ' + restDigits : ' ');
-    } else if (!newContact.includes('+')) {
-      newContact = selectedC.dialCode + ' ' + newContact;
-    }
+    const { formattedPhone, activeCountry } = enforceCountryPhoneLengthAndFormat(newBooking.guest_contact, countryCode);
     
     setNewBooking(prev => ({
       ...prev,
-      guest_country: countryCode,
-      guest_contact: newContact
+      guest_country: activeCountry,
+      guest_contact: formattedPhone
     }));
 
     if (hasSubmittedModal) {
-      const phoneErr = validatePhoneNumber(newContact, countryCode);
-      const pinErr = validatePinCode(newBooking.guest_pincode, countryCode);
+      const phoneErr = validatePhoneNumber(formattedPhone, activeCountry);
+      const pinErr = validatePinCode(newBooking.guest_pincode, activeCountry);
       setFormErrors(prev => ({
         ...prev,
         guest_country: '',
@@ -369,11 +424,17 @@ export default function CalendarPage() {
   };
 
   const handlePhoneChange = (val: string) => {
-    const sanitized = val.replace(/[^\d+\s-]/g, '');
-    setNewBooking(prev => ({ ...prev, guest_contact: sanitized }));
+    const { formattedPhone, activeCountry } = enforceCountryPhoneLengthAndFormat(val, newBooking.guest_country);
+    
+    setNewBooking(prev => ({
+      ...prev,
+      guest_country: activeCountry,
+      guest_contact: formattedPhone
+    }));
+
     if (hasSubmittedModal) {
-      const err = validatePhoneNumber(sanitized, newBooking.guest_country);
-      setFormErrors(prev => ({ ...prev, guest_contact: err || '' }));
+      const err = validatePhoneNumber(formattedPhone, activeCountry);
+      setFormErrors(prev => ({ ...prev, guest_contact: err || '', guest_country: '' }));
     } else if (formErrors.guest_contact) {
       setFormErrors(prev => ({ ...prev, guest_contact: '' }));
     }
@@ -421,7 +482,7 @@ export default function CalendarPage() {
   const isRoomReadyForBooking = (room: any) => {
     if (!room) return false;
     const status = room.housekeeping_status;
-    return !status || status === 'Room Available' || status === 'Vacant Ready';
+    return !status || status === 'Room Available' || status === 'Vacant Ready' || status === 'Clean';
   };
 
   const handleCellClick = (roomId: string, date: Date) => {
@@ -441,7 +502,7 @@ export default function CalendarPage() {
     setNewBooking({
       guest_name: '',
       guest_country: 'IN',
-      guest_contact: '+91 ',
+      guest_contact: '',
       guest_email: '',
       guest_address: '',
       guest_pincode: '',
@@ -1277,15 +1338,18 @@ export default function CalendarPage() {
                     <label className="text-[10px] font-bold text-zinc-500 ml-1 flex items-center gap-1">
                       Contact Number <span className="text-rose-500 font-extrabold">*</span>
                     </label>
-                    <div className="relative">
+                    <div className={`flex items-center w-full rounded-2xl border-2 transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_contact ? 'border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus-within:border-indigo-500'}`}>
+                      <span className="pl-4 pr-2 font-bold text-sm text-zinc-500 dark:text-zinc-400 shrink-0 select-none border-r border-zinc-200/60 dark:border-zinc-800 py-1 mr-2">
+                        {COUNTRIES.find(c => c.code === newBooking.guest_country)?.dialCode || '+91'}
+                      </span>
                       <input
                         type="text"
-                        placeholder={`${COUNTRIES.find(c => c.code === newBooking.guest_country)?.dialCode || '+91'} 0000000000`}
-                        className={`w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all shadow-sm ${hasSubmittedModal && formErrors.guest_contact ? 'border-2 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' : 'border-2 border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:border-indigo-500'}`}
+                        placeholder={COUNTRIES.find(c => c.code === newBooking.guest_country)?.phoneDigitsMsg || 'National Number'}
+                        className="w-full py-4 pr-10 bg-transparent font-bold text-sm outline-none border-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
                         value={newBooking.guest_contact}
                         onChange={e => handlePhoneChange(e.target.value)}
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg pointer-events-none">
+                      <span className="pr-4 text-lg pointer-events-none shrink-0">
                         {COUNTRIES.find(c => c.code === newBooking.guest_country)?.flag || '🌐'}
                       </span>
                     </div>
@@ -1508,10 +1572,13 @@ export default function CalendarPage() {
                       if (!validateBookingForm()) {
                         return;
                       }
+                      const dialCode = COUNTRIES.find(c => c.code === newBooking.guest_country)?.dialCode || '';
+                      const fullContactNumber = `${dialCode} ${newBooking.guest_contact}`.trim();
+
                       createBooking.mutate({
                         room_id: bookingModal.roomId,
                         guest_name: newBooking.guest_name,
-                        guest_contact: newBooking.guest_contact,
+                        guest_contact: fullContactNumber,
                         guest_country: newBooking.guest_country,
                         guest_address: newBooking.guest_address,
                         guest_pincode: newBooking.guest_pincode,
