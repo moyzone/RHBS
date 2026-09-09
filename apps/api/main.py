@@ -621,8 +621,10 @@ def extend_booking(booking_id: str, req: BookingExtend, context: dict = Depends(
     if not booking:
         raise HTTPException(404, "Booking not found")
 
-    new_checkout_dt = datetime.fromisoformat(req.new_check_out.replace("Z", "+00:00"))
-    if new_checkout_dt <= booking.check_out:
+    new_checkout_dt = datetime.fromisoformat(req.new_check_out.replace("Z", "").split("+")[0])
+    current_check_out = booking.check_out.replace(tzinfo=None) if hasattr(booking.check_out, "tzinfo") and booking.check_out.tzinfo else booking.check_out
+
+    if new_checkout_dt <= current_check_out:
         raise HTTPException(400, "New checkout date must be after current checkout date")
 
     # Conflict check for requested room during extension period
@@ -632,7 +634,7 @@ def extend_booking(booking_id: str, req: BookingExtend, context: dict = Depends(
         Booking.id != booking_id,
         Booking.status.in_(["Confirmed", "Checked-in"]),
         Booking.check_in < new_checkout_dt,
-        Booking.check_out > booking.check_out
+        Booking.check_out > current_check_out
     ).first()
 
     if conflicting:
@@ -642,7 +644,7 @@ def extend_booking(booking_id: str, req: BookingExtend, context: dict = Depends(
         )
 
     # Calculate additional price
-    diff_seconds = (new_checkout_dt - booking.check_out).total_seconds()
+    diff_seconds = (new_checkout_dt - current_check_out).total_seconds()
     extra_nights = max(1, int(round(diff_seconds / (24 * 3600))))
 
     room = db.query(Room).filter(Room.id == booking.room_id).first()

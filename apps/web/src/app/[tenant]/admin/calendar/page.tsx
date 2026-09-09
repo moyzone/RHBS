@@ -193,7 +193,7 @@ export default function CalendarPage() {
   const { data: bookings = [] } = useQuery({ queryKey: ['bookings', tenant], queryFn: () => fetchApi<any[]>(tenant, '/bookings') });
   const { data: payments = [] } = useQuery({ queryKey: ['payments', tenant], queryFn: () => fetchApi<any[]>(tenant, '/payments') });
 
-  const dates = Array.from({ length: 30 }, (_, i) => { const d = new Date(startDate); d.setDate(d.getDate() + i); return d; });
+  const dates = Array.from({ length: 7 }, (_, i) => { const d = new Date(startDate); d.setDate(d.getDate() + i); return d; });
 
   const [bookingModal, setBookingModal] = useState<{ isOpen: boolean, roomId: string, date: Date | null }>({ isOpen: false, roomId: '', date: null });
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
@@ -788,12 +788,12 @@ export default function CalendarPage() {
           <h1 className="text-2xl font-bold tracking-tight">Master Calendar</h1>
 
           <div className="flex items-center bg-gray-50 dark:bg-zinc-800/50 p-1.5 rounded-lg border border-gray-100 dark:border-zinc-800">
-            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() - 14); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronLeft className="w-5 h-5" /></button>
+            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() - 7); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronLeft className="w-5 h-5" /></button>
             <div className="px-5 py-1.5 text-base font-medium flex items-center gap-2 border-x border-gray-200 dark:border-zinc-700 mx-1">
               <CalendarIcon className="w-4 h-4 text-[var(--theme-color,#4f46e5)]" />
               {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {dates[dates.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
-            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() + 14); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronRight className="w-5 h-5" /></button>
+            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() + 7); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronRight className="w-5 h-5" /></button>
           </div>
         </div>
 
@@ -1653,11 +1653,17 @@ export default function CalendarPage() {
                   <button
                     onClick={() => {
                       if (overdueWorkflowMode !== 'extend') {
-                        const currentOut = new Date(selectedBooking.check_out);
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        const nextDate = currentOut > tomorrow ? currentOut : tomorrow;
+                        const currentOutStr = selectedBooking.check_out.split('T')[0];
+                        const [cy, cm, cd] = currentOutStr.split('-').map(Number);
+                        const currentOutDate = new Date(cy, cm - 1, cd);
+
+                        const todayDate = new Date();
+                        todayDate.setHours(0, 0, 0, 0);
+
+                        const baseDate = currentOutDate > todayDate ? currentOutDate : todayDate;
+                        const nextDate = new Date(baseDate);
                         nextDate.setDate(nextDate.getDate() + 1);
+
                         const year = nextDate.getFullYear();
                         const month = String(nextDate.getMonth() + 1).padStart(2, '0');
                         const day = String(nextDate.getDate()).padStart(2, '0');
@@ -1680,23 +1686,22 @@ export default function CalendarPage() {
             {overdueWorkflowMode === 'extend' && (
               <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded-2xl space-y-3">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">Extend Stay Duration</h4>
-                <div>
-                  <span className="text-[10px] text-zinc-500 font-bold block mb-1">New Checkout Date</span>
-                  <input
-                    type="date"
-                    min={selectedBooking.check_out.split('T')[0]}
-                    value={extendCheckoutDate}
-                    onChange={e => setExtendCheckoutDate(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
                 {(() => {
-                  if (!extendCheckoutDate) return null;
-                  const currentOut = new Date(selectedBooking.check_out.split('T')[0]);
-                  const newOut = new Date(extendCheckoutDate);
-                  const diff = newOut.getTime() - currentOut.getTime();
-                  const extraNights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+                  const currentOutStr = selectedBooking.check_out.split('T')[0];
+                  const [cy, cm, cd] = currentOutStr.split('-').map(Number);
+                  const currentOutDate = new Date(cy, cm - 1, cd);
+
+                  const minDate = new Date(currentOutDate);
+                  minDate.setDate(minDate.getDate() + 1);
+                  const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`;
+
+                  let extraNights = 0;
+                  if (extendCheckoutDate) {
+                    const [ny, nm, nd] = extendCheckoutDate.split('-').map(Number);
+                    const newOutDate = new Date(ny, nm - 1, nd);
+                    const diffMs = newOutDate.getTime() - currentOutDate.getTime();
+                    extraNights = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                  }
 
                   const room = rooms.find((r: any) => r.id === selectedBooking.room_id);
                   const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
@@ -1704,56 +1709,71 @@ export default function CalendarPage() {
                   const extraAmount = extraNights * basePrice;
                   const newTotal = Number(selectedBooking.total_price || 0) + extraAmount;
 
-                  const isConflict = isRoomBookedExceptSelf(
-                    selectedBooking.room_id,
-                    selectedBooking.check_out.split('T')[0],
-                    extendCheckoutDate,
-                    selectedBooking.id
-                  );
+                  const isConflict = extendCheckoutDate
+                    ? isRoomBookedExceptSelf(
+                        selectedBooking.room_id,
+                        selectedBooking.check_out.split('T')[0],
+                        extendCheckoutDate,
+                        selectedBooking.id
+                      )
+                    : false;
 
                   return (
-                    <div className="space-y-3 pt-1">
-                      {isConflict ? (
-                        <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl text-[11px] text-rose-800 dark:text-rose-300 font-semibold space-y-1">
-                          <p className="flex items-center gap-1.5 font-bold">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Overbooking Warning
-                          </p>
-                          <p>Room is reserved by another guest on selected extension dates. Please reassign the booking room first.</p>
-                          <button
-                            onClick={() => {
-                              setIsEditBookingMode(true);
-                              setOverdueWorkflowMode(null);
-                            }}
-                            className="text-xs text-indigo-600 dark:text-indigo-400 underline font-bold pt-1 block"
-                          >
-                            Reassign Room in Edit Mode
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="p-2.5 bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-xs space-y-1">
-                          <div className="flex justify-between text-zinc-500">
-                            <span>Extension Nights:</span>
-                            <span className="font-bold text-zinc-800 dark:text-zinc-200">+{extraNights} Night(s)</span>
-                          </div>
-                          <div className="flex justify-between text-zinc-500">
-                            <span>Room Rate:</span>
-                            <span className="font-bold text-zinc-800 dark:text-zinc-200">₹{basePrice}/night</span>
-                          </div>
-                          <div className="flex justify-between text-indigo-600 dark:text-indigo-400 font-bold pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                            <span>New Total Bill:</span>
-                            <span>₹{newTotal} (+₹{extraAmount})</span>
-                          </div>
-                        </div>
-                      )}
+                    <>
+                      <div>
+                        <span className="text-[10px] text-zinc-500 font-bold block mb-1">New Checkout Date</span>
+                        <input
+                          type="date"
+                          min={minDateStr}
+                          value={extendCheckoutDate}
+                          onChange={e => setExtendCheckoutDate(e.target.value)}
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
 
-                      <button
-                        onClick={() => extendBooking.mutate({ id: selectedBooking.id, new_check_out: new Date(extendCheckoutDate).toISOString() })}
-                        disabled={isConflict || extendBooking.isPending || !extendCheckoutDate}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
-                      >
-                        {extendBooking.isPending ? 'Extending...' : 'Confirm Stay Extension'}
-                      </button>
-                    </div>
+                      <div className="space-y-3 pt-1">
+                        {isConflict ? (
+                          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl text-[11px] text-rose-800 dark:text-rose-300 font-semibold space-y-1">
+                            <p className="flex items-center gap-1.5 font-bold">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Overbooking Warning
+                            </p>
+                            <p>Room is reserved by another guest on selected extension dates. Please reassign the booking room first.</p>
+                            <button
+                              onClick={() => {
+                                setIsEditBookingMode(true);
+                                setOverdueWorkflowMode(null);
+                              }}
+                              className="text-xs text-indigo-600 dark:text-indigo-400 underline font-bold pt-1 block"
+                            >
+                              Reassign Room in Edit Mode
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-xs space-y-1">
+                            <div className="flex justify-between text-zinc-500">
+                              <span>Extension Nights:</span>
+                              <span className="font-bold text-zinc-800 dark:text-zinc-200">+{extraNights} Night(s)</span>
+                            </div>
+                            <div className="flex justify-between text-zinc-500">
+                              <span>Room Rate:</span>
+                              <span className="font-bold text-zinc-800 dark:text-zinc-200">₹{basePrice}/night</span>
+                            </div>
+                            <div className="flex justify-between text-indigo-600 dark:text-indigo-400 font-bold pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                              <span>New Total Bill:</span>
+                              <span>₹{newTotal} (+₹{extraAmount})</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => extendBooking.mutate({ id: selectedBooking.id, new_check_out: new Date(extendCheckoutDate).toISOString() })}
+                          disabled={isConflict || extendBooking.isPending || !extendCheckoutDate || extraNights <= 0}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md"
+                        >
+                          {extendBooking.isPending ? 'Extending...' : 'Confirm Stay Extension'}
+                        </button>
+                      </div>
+                    </>
                   );
                 })()}
               </div>
