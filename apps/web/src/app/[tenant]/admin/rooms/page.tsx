@@ -12,12 +12,27 @@ export default function RoomsManagementPage() {
   const tenant = params.tenant as string;
   const qc = useQueryClient();
 
-  const [newRoomType, setNewRoomType] = useState({ name: '', base_price: '' as number | string, capacity: 2 as number | string });
+  const isDayUseEnabled = process.env.NEXT_PUBLIC_ENABLE_DAY_USE === 'true';
+  const isHourlyEnabled = process.env.NEXT_PUBLIC_ENABLE_HOURLY_BOOKING === 'true';
+
+  const [newRoomType, setNewRoomType] = useState({
+    name: '',
+    base_price: '' as number | string,
+    capacity: 2 as number | string,
+    day_use_price: '' as number | string,
+    hourly_price: '' as number | string
+  });
   const [newRoom, setNewRoom] = useState({ name: '', room_type_id: '' });
 
   // Editing state for Room Types
   const [editingRTId, setEditingRTId] = useState<string | null>(null);
-  const [editingRTForm, setEditingRTForm] = useState({ name: '', base_price: 0, capacity: 2 });
+  const [editingRTForm, setEditingRTForm] = useState({
+    name: '',
+    base_price: 0,
+    capacity: 2,
+    day_use_price: 0 as number | string,
+    hourly_price: 0 as number | string
+  });
 
   // Editing state for Physical Rooms
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
@@ -42,7 +57,10 @@ export default function RoomsManagementPage() {
 
   const createRTMutation = useMutation({
     mutationFn: (rt: any) => fetchApi(tenant, '/room-types', { method: 'POST', body: JSON.stringify(rt) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['roomTypes', tenant] }); setNewRoomType({ name: '', base_price: '', capacity: 2 }) }
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roomTypes', tenant] });
+      setNewRoomType({ name: '', base_price: '', capacity: 2, day_use_price: '', hourly_price: '' });
+    }
   });
 
   const updateRTMutation = useMutation({
@@ -93,8 +111,8 @@ export default function RoomsManagementPage() {
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-6">
         <h2 className="text-xl font-semibold mb-4">Room Types</h2>
         
-        <div className="flex gap-4 mb-6 items-end">
-          <div className="flex-1">
+        <div className="flex gap-4 mb-6 items-end flex-wrap">
+          <div className="flex-1 min-w-[200px]">
             <label className="text-sm font-medium text-zinc-500 mb-1 block">Category Name</label>
             <input type="text" className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700" placeholder="e.g. Deluxe Suite" value={newRoomType.name} onChange={e => setNewRoomType({ ...newRoomType, name: e.target.value })}/>
           </div>
@@ -102,12 +120,40 @@ export default function RoomsManagementPage() {
             <label className="text-sm font-medium text-zinc-500 mb-1 block">Base Price (INR)</label>
             <input type="number" className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700" value={newRoomType.base_price} onChange={e => setNewRoomType({ ...newRoomType, base_price: e.target.value === '' ? '' : Number(e.target.value) })}/>
           </div>
+          {isDayUseEnabled && (
+            <div>
+              <label className="text-sm font-medium text-zinc-500 mb-1 block">Day Use Rate (INR)</label>
+              <input
+                type="number"
+                className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700"
+                placeholder="Day use rate"
+                value={newRoomType.day_use_price}
+                onChange={e => setNewRoomType({ ...newRoomType, day_use_price: e.target.value === '' ? '' : Number(e.target.value) })}
+              />
+            </div>
+          )}
+          {isHourlyEnabled && (
+            <div>
+              <label className="text-sm font-medium text-zinc-500 mb-1 block">Hourly Rate (INR)</label>
+              <input
+                type="number"
+                className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700"
+                placeholder="Hourly rate"
+                value={newRoomType.hourly_price}
+                onChange={e => setNewRoomType({ ...newRoomType, hourly_price: e.target.value === '' ? '' : Number(e.target.value) })}
+              />
+            </div>
+          )}
           <div>
             <label className="text-sm font-medium text-zinc-500 mb-1 block">Capacity</label>
             <input type="number" className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700" value={newRoomType.capacity} onChange={e => setNewRoomType({ ...newRoomType, capacity: e.target.value === '' ? '' : Number(e.target.value) })}/>
           </div>
           <button 
-            onClick={() => createRTMutation.mutate(newRoomType)}
+            onClick={() => createRTMutation.mutate({
+              ...newRoomType,
+              day_use_price: newRoomType.day_use_price !== '' ? Number(newRoomType.day_use_price) : undefined,
+              hourly_price: newRoomType.hourly_price !== '' ? Number(newRoomType.hourly_price) : undefined
+            })}
             className="bg-[var(--theme-color,#4f46e5)] hover:opacity-90 text-white font-medium rounded-lg px-4 py-2 h-[42px] flex items-center"
           >
             <Plus className="w-4 h-4 mr-2" /> Add Type
@@ -120,12 +166,14 @@ export default function RoomsManagementPage() {
               <tr>
                 <th className="font-semibold p-3 text-left">Name</th>
                 <th className="font-semibold p-3 text-left">Base Price</th>
+                {isDayUseEnabled && <th className="font-semibold p-3 text-left">Day Use Rate</th>}
+                {isHourlyEnabled && <th className="font-semibold p-3 text-left">Hourly Rate</th>}
                 <th className="font-semibold p-3 text-left">Capacity</th>
                 <th className="font-semibold p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {isLoadingRT ? <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr> : roomTypes.map((rt: any) => {
+              {isLoadingRT ? <tr><td colSpan={4 + (isDayUseEnabled ? 1 : 0) + (isHourlyEnabled ? 1 : 0)} className="p-4 text-center">Loading...</td></tr> : roomTypes.map((rt: any) => {
                 const isEditing = editingRTId === rt.id;
                 return (
                 <tr key={rt.id} className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
@@ -149,6 +197,34 @@ export default function RoomsManagementPage() {
                         />
                       ) : `₹${rt.base_price}`}
                   </td>
+                  {isDayUseEnabled && (
+                    <td className="p-3">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="w-24 border rounded px-2 py-1 dark:bg-zinc-800 dark:border-zinc-700"
+                          value={editingRTForm.day_use_price}
+                          onChange={e => setEditingRTForm({...editingRTForm, day_use_price: e.target.value === '' ? '' : Number(e.target.value)})}
+                        />
+                      ) : (
+                        rt.day_use_price != null && rt.day_use_price !== '' ? `₹${rt.day_use_price}` : <span className="text-rose-500 italic font-semibold text-xs">Not Set</span>
+                      )}
+                    </td>
+                  )}
+                  {isHourlyEnabled && (
+                    <td className="p-3">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="w-24 border rounded px-2 py-1 dark:bg-zinc-800 dark:border-zinc-700"
+                          value={editingRTForm.hourly_price}
+                          onChange={e => setEditingRTForm({...editingRTForm, hourly_price: e.target.value === '' ? '' : Number(e.target.value)})}
+                        />
+                      ) : (
+                        rt.hourly_price != null && rt.hourly_price !== '' ? `₹${rt.hourly_price}/hr` : <span className="text-rose-500 italic font-semibold text-xs">Not Set</span>
+                      )}
+                    </td>
+                  )}
                   <td className="p-3">
                     {isEditing ? (
                         <input 
@@ -164,7 +240,12 @@ export default function RoomsManagementPage() {
                        {isEditing ? (
                          <>
                            <button 
-                             onClick={() => updateRTMutation.mutate({ id: rt.id, ...editingRTForm })}
+                             onClick={() => updateRTMutation.mutate({
+                               id: rt.id,
+                               ...editingRTForm,
+                               day_use_price: editingRTForm.day_use_price !== '' ? Number(editingRTForm.day_use_price) : undefined,
+                               hourly_price: editingRTForm.hourly_price !== '' ? Number(editingRTForm.hourly_price) : undefined
+                             })}
                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
                            >
                              <Save className="w-4 h-4" />
@@ -181,7 +262,13 @@ export default function RoomsManagementPage() {
                            <button 
                              onClick={() => {
                                setEditingRTId(rt.id);
-                               setEditingRTForm({ name: rt.name, base_price: rt.base_price, capacity: rt.capacity });
+                               setEditingRTForm({
+                                 name: rt.name,
+                                 base_price: rt.base_price,
+                                 capacity: rt.capacity,
+                                 day_use_price: rt.day_use_price ?? '',
+                                 hourly_price: rt.hourly_price ?? ''
+                               });
                              }}
                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                            >

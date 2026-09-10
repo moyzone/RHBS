@@ -182,6 +182,10 @@ export default function CalendarPage() {
   const tenant = params.tenant as string;
   const qc = useQueryClient();
 
+  const isDayUseEnabled = process.env.NEXT_PUBLIC_ENABLE_DAY_USE === 'true';
+  const isHourlyEnabled = process.env.NEXT_PUBLIC_ENABLE_HOURLY_BOOKING === 'true';
+  const isSameDateAllowed = isDayUseEnabled || isHourlyEnabled;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [housekeepingSearch, setHousekeepingSearch] = useState('');
   const [activeStatusFilter, setActiveStatusFilter] = useState('All');
@@ -212,7 +216,9 @@ export default function CalendarPage() {
     amount_paid: '' as number | string,
     payment_method: 'UPI',
     booking_source: 'Offline',
-    check_out: '' // Added for multi-day support
+    check_out: '',
+    stay_type: 'overnight' as 'overnight' | 'day_use' | 'hourly',
+    hours_of_stay: 4
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [hasSubmittedModal, setHasSubmittedModal] = useState(false);
@@ -511,7 +517,9 @@ export default function CalendarPage() {
       amount_paid: price,
       payment_method: 'UPI',
       booking_source: 'Offline',
-      check_out: nextDay.toISOString().split('T')[0]
+      check_out: nextDay.toISOString().split('T')[0],
+      stay_type: 'overnight',
+      hours_of_stay: 4
     });
     setFormErrors({});
     setHasSubmittedModal(false);
@@ -554,9 +562,43 @@ export default function CalendarPage() {
 
   const getMinCheckoutDate = (checkInDate: Date | null) => {
     if (!checkInDate) return '';
+    if (isSameDateAllowed) {
+      return formatDateToInput(checkInDate);
+    }
     const minDate = new Date(checkInDate);
     minDate.setDate(minDate.getDate() + 1);
     return formatDateToInput(minDate);
+  };
+
+  const calculateBookingTotal = (
+    roomId: string,
+    checkInDate: Date | null,
+    checkOutDateStr: string,
+    stayType: string,
+    hours: number
+  ) => {
+    if (!checkInDate || !checkOutDateStr) return 0;
+    const room = rooms.find((r: any) => r.id === roomId);
+    const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
+    const checkInStr = formatDateToInput(checkInDate);
+
+    const isSameDate = checkOutDateStr === checkInStr;
+
+    if (isSameDate || stayType === 'day_use' || stayType === 'hourly') {
+      if (stayType === 'hourly' || (isHourlyEnabled && !isDayUseEnabled)) {
+        const hPrice = Number(roomType?.hourly_price || 0);
+        return hours * hPrice;
+      } else {
+        const duPrice = Number(roomType?.day_use_price || 0);
+        return duPrice;
+      }
+    }
+
+    const start = new Date(checkInDate);
+    const end = new Date(checkOutDateStr);
+    const diff = end.getTime() - start.getTime();
+    const nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    return nights * (roomType?.base_price || 0);
   };
 
   const handleCheckInChange = (newDateStr: string) => {
@@ -567,22 +609,21 @@ export default function CalendarPage() {
     let nextCheckoutStr = newBooking.check_out;
     const currentCheckout = new Date(newBooking.check_out);
 
-    if (!newBooking.check_out || currentCheckout <= newCheckInDate) {
+    if (!newBooking.check_out || currentCheckout < newCheckInDate) {
       const nextDay = new Date(newCheckInDate);
-      nextDay.setDate(nextDay.getDate() + 1);
+      if (!isSameDateAllowed) {
+        nextDay.setDate(nextDay.getDate() + 1);
+      }
       nextCheckoutStr = formatDateToInput(nextDay);
     }
 
-    const room = rooms.find((r: any) => r.id === bookingModal.roomId);
-    const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
-    const basePrice = roomType?.base_price || 0;
-
-    const start = newCheckInDate;
-    const end = new Date(nextCheckoutStr);
-    const diff = end.getTime() - start.getTime();
-    const nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-
-    const newTotal = nights * basePrice;
+    const newTotal = calculateBookingTotal(
+      bookingModal.roomId,
+      newCheckInDate,
+      nextCheckoutStr,
+      newBooking.stay_type,
+      newBooking.hours_of_stay
+    );
 
     setBookingModal(prev => ({ ...prev, date: newCheckInDate }));
     setNewBooking(prev => ({
@@ -603,19 +644,58 @@ export default function CalendarPage() {
   };
 
   const handleCheckoutChange = (newDate: string) => {
-    const room = rooms.find((r: any) => r.id === bookingModal.roomId);
-    const roomType = roomTypes.find((rt: any) => rt.id === room?.room_type_id);
-    const basePrice = roomType?.base_price || 0;
+    const isSameDate = newDate === formatDateToInput(bookingModal.date);
+    let updatedStayType = newBooking.stay_type;
+    if (isSameDate && newBooking.stay_type === 'overnight') {
+      updatedStayType = isHourlyEnabled && !isDayUseEnabled ? 'hourly' : 'day_use';
+    }
 
-    const start = new Date(bookingModal.date!);
-    const end = new Date(newDate);
-    const diff = end.getTime() - start.getTime();
-    const nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    const newTotal = calculateBookingTotal(
+      bookingModal.roomId,
+      bookingModal.date,
+      newDate,
+      updatedStayType,
+      newBooking.hours_of_stay
+    );
 
-    const newTotal = nights * basePrice;
     setNewBooking(prev => ({
       ...prev,
       check_out: newDate,
+      stay_type: updatedStayType,
+      total_price: newTotal,
+      amount_paid: isFullPayment ? newTotal : prev.amount_paid
+    }));
+  };
+
+  const handleStayTypeChange = (type: any) => {
+    const newTotal = calculateBookingTotal(
+      bookingModal.roomId,
+      bookingModal.date,
+      newBooking.check_out,
+      type,
+      newBooking.hours_of_stay
+    );
+
+    setNewBooking(prev => ({
+      ...prev,
+      stay_type: type,
+      total_price: newTotal,
+      amount_paid: isFullPayment ? newTotal : prev.amount_paid
+    }));
+  };
+
+  const handleHoursChange = (hours: number) => {
+    const newTotal = calculateBookingTotal(
+      bookingModal.roomId,
+      bookingModal.date,
+      newBooking.check_out,
+      newBooking.stay_type,
+      hours
+    );
+
+    setNewBooking(prev => ({
+      ...prev,
+      hours_of_stay: hours,
       total_price: newTotal,
       amount_paid: isFullPayment ? newTotal : prev.amount_paid
     }));
@@ -787,13 +867,52 @@ export default function CalendarPage() {
         <div className="flex items-center gap-6">
           <h1 className="text-2xl font-bold tracking-tight">Master Calendar</h1>
 
-          <div className="flex items-center bg-gray-50 dark:bg-zinc-800/50 p-1.5 rounded-lg border border-gray-100 dark:border-zinc-800">
-            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() - 7); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronLeft className="w-5 h-5" /></button>
-            <div className="px-5 py-1.5 text-base font-medium flex items-center gap-2 border-x border-gray-200 dark:border-zinc-700 mx-1">
-              <CalendarIcon className="w-4 h-4 text-[var(--theme-color,#4f46e5)]" />
-              {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {dates[dates.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          <div className="flex items-center bg-gray-50 dark:bg-zinc-800/50 p-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 gap-1">
+            <button
+              onClick={() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                setStartDate(today);
+              }}
+              className="px-3 py-1 text-xs font-bold bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-md transition-all text-zinc-700 dark:text-zinc-200"
+              title="Jump to Today"
+            >
+              Today
+            </button>
+            <button
+              onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() - 7); setStartDate(d); }}
+              className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"
+              title="Previous 7 Days"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="relative flex items-center gap-2 px-3 py-1 border-x border-gray-200 dark:border-zinc-700 mx-1 font-semibold text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 cursor-pointer group">
+              <CalendarIcon className="w-4 h-4 text-[var(--theme-color,#4f46e5)] shrink-0" />
+              <span>
+                {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {dates[dates.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+              <input
+                type="date"
+                value={formatDateToInput(startDate)}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [y, m, d] = e.target.value.split('-').map(Number);
+                    setStartDate(new Date(y, m - 1, d));
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title="Select start date for 7-day view"
+              />
             </div>
-            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() + 7); setStartDate(d); }} className="p-2 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"><ChevronRight className="w-5 h-5" /></button>
+
+            <button
+              onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() + 7); setStartDate(d); }}
+              className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-white"
+              title="Next 7 Days"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
@@ -1473,7 +1592,11 @@ export default function CalendarPage() {
                 <div className="flex justify-between items-center px-1">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Stay Duration</label>
                   <span className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                    {calculateNights()} {calculateNights() === 1 ? 'Night' : 'Nights'} Stay
+                    {newBooking.check_out === formatDateToInput(bookingModal.date)
+                      ? (newBooking.stay_type === 'hourly' || (isHourlyEnabled && !isDayUseEnabled)
+                          ? `${newBooking.hours_of_stay} Hour(s) Hourly Stay`
+                          : `Day Use Stay (${newBooking.hours_of_stay} Hours)`)
+                      : `${calculateNights()} ${calculateNights() === 1 ? 'Night' : 'Nights'} Stay`}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
@@ -1497,6 +1620,71 @@ export default function CalendarPage() {
                     />
                   </div>
                 </div>
+
+                {/* Stay Mode and Hours of Stay controls */}
+                {(newBooking.check_out === formatDateToInput(bookingModal.date) || isSameDateAllowed) && (
+                  <div className="grid grid-cols-2 gap-6 pt-1">
+                    {(isDayUseEnabled && isHourlyEnabled) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-zinc-500 ml-1">Stay Mode</span>
+                        <select
+                          className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none focus:border-indigo-500 transition-all shadow-sm"
+                          value={newBooking.stay_type}
+                          onChange={e => handleStayTypeChange(e.target.value)}
+                        >
+                          <option value="overnight">Overnight Stay</option>
+                          <option value="day_use">Day Use</option>
+                          <option value="hourly">Hourly</option>
+                        </select>
+                      </div>
+                    )}
+                    {(newBooking.check_out === formatDateToInput(bookingModal.date) || newBooking.stay_type !== 'overnight') && (
+                      <div className="space-y-1.5 col-span-1">
+                        <span className="text-[10px] font-bold text-zinc-500 ml-1">Hours of Stay</span>
+                        <select
+                          className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 p-4 rounded-2xl font-bold text-xs outline-none focus:border-indigo-500 transition-all shadow-sm"
+                          value={newBooking.hours_of_stay}
+                          onChange={e => handleHoursChange(Number(e.target.value))}
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(h => (
+                            <option key={h} value={h}>{h} {h === 1 ? 'Hour' : 'Hours'}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Day Use / Hourly Rate Missing Error Banner */}
+                {(() => {
+                  const currentRoom = rooms.find((r: any) => r.id === bookingModal.roomId);
+                  const roomType = roomTypes.find((rt: any) => rt.id === currentRoom?.room_type_id);
+                  const isSameDate = newBooking.check_out === formatDateToInput(bookingModal.date);
+
+                  if (isSameDate || newBooking.stay_type === 'day_use' || newBooking.stay_type === 'hourly') {
+                    const isHourlyMode = newBooking.stay_type === 'hourly' || (isHourlyEnabled && !isDayUseEnabled);
+                    if (isHourlyMode) {
+                      if (!roomType?.hourly_price || Number(roomType.hourly_price) <= 0) {
+                        return (
+                          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-200 dark:border-rose-900 rounded-2xl flex items-center gap-3 text-rose-600 dark:text-rose-400 font-extrabold text-xs animate-in fade-in slide-in-from-top-2">
+                            <AlertTriangle className="w-5 h-5 shrink-0" />
+                            <span>Hourly rate not set</span>
+                          </div>
+                        );
+                      }
+                    } else {
+                      if (!roomType?.day_use_price || Number(roomType.day_use_price) <= 0) {
+                        return (
+                          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-200 dark:border-rose-900 rounded-2xl flex items-center gap-3 text-rose-600 dark:text-rose-400 font-extrabold text-xs animate-in fade-in slide-in-from-top-2">
+                            <AlertTriangle className="w-5 h-5 shrink-0" />
+                            <span>Day use rate not set</span>
+                          </div>
+                        );
+                      }
+                    }
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Section 3: Financials */}
@@ -1559,9 +1747,22 @@ export default function CalendarPage() {
               <button onClick={() => setBookingModal({ isOpen: false, roomId: '', date: null })} className="px-8 py-4 font-black text-xs uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-all">Discard</button>
               {(() => {
                 const currentRoom = rooms.find((r: any) => r.id === bookingModal.roomId);
+                const roomType = roomTypes.find((rt: any) => rt.id === currentRoom?.room_type_id);
                 const isCurrentRoomNotReady = currentRoom && !isRoomReadyForBooking(currentRoom);
                 const isCurrentRoomBooked = isRoomBookedForDates(bookingModal.roomId, bookingModal.date, newBooking.check_out);
-                const isBlocked = isCurrentRoomBooked || isCurrentRoomNotReady || createBooking.isPending;
+
+                const isSameDate = newBooking.check_out === formatDateToInput(bookingModal.date);
+                let isRateMissing = false;
+                if (isSameDate || newBooking.stay_type === 'day_use' || newBooking.stay_type === 'hourly') {
+                  const isHourlyMode = newBooking.stay_type === 'hourly' || (isHourlyEnabled && !isDayUseEnabled);
+                  if (isHourlyMode) {
+                    if (!roomType?.hourly_price || Number(roomType.hourly_price) <= 0) isRateMissing = true;
+                  } else {
+                    if (!roomType?.day_use_price || Number(roomType.day_use_price) <= 0) isRateMissing = true;
+                  }
+                }
+
+                const isBlocked = isCurrentRoomBooked || isCurrentRoomNotReady || isRateMissing || createBooking.isPending;
 
                 return (
                   <button
@@ -1653,7 +1854,7 @@ export default function CalendarPage() {
                   <button
                     onClick={() => {
                       if (overdueWorkflowMode !== 'extend') {
-                        const currentOutStr = selectedBooking.check_out.split('T')[0];
+                        const currentOutStr = selectedBooking.check_out.replace(' ', 'T').split('T')[0];
                         const [cy, cm, cd] = currentOutStr.split('-').map(Number);
                         const currentOutDate = new Date(cy, cm - 1, cd);
 
@@ -1687,7 +1888,7 @@ export default function CalendarPage() {
               <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded-2xl space-y-3">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">Extend Stay Duration</h4>
                 {(() => {
-                  const currentOutStr = selectedBooking.check_out.split('T')[0];
+                  const currentOutStr = selectedBooking.check_out.replace(' ', 'T').split('T')[0];
                   const [cy, cm, cd] = currentOutStr.split('-').map(Number);
                   const currentOutDate = new Date(cy, cm - 1, cd);
 
@@ -1712,7 +1913,7 @@ export default function CalendarPage() {
                   const isConflict = extendCheckoutDate
                     ? isRoomBookedExceptSelf(
                         selectedBooking.room_id,
-                        selectedBooking.check_out.split('T')[0],
+                        selectedBooking.check_out.replace(' ', 'T').split('T')[0],
                         extendCheckoutDate,
                         selectedBooking.id
                       )

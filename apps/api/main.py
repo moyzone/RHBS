@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 import shutil
 
+sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../packages'))
 from database.session import get_db, set_rls_context
 from database.schema import RoomType, Room, Booking, Invoice, Payment, Guest, Staff, Tenant, User
@@ -56,6 +57,8 @@ def get_user_context(credentials: HTTPAuthorizationCredentials = Depends(securit
 # ---- Pydantic Schemas ----
 class RoomTypeCreate(BaseModel):
     name: str; base_price: float; capacity: int
+    day_use_price: Optional[float] = None
+    hourly_price: Optional[float] = None
 
 class RoomCreate(BaseModel):
     name: str; room_type_id: str; housekeeping_status: Optional[str] = "Clean"
@@ -88,6 +91,8 @@ class RoomTypeUpdate(BaseModel):
     name: Optional[str] = None
     base_price: Optional[float] = None
     capacity: Optional[int] = None
+    day_use_price: Optional[float] = None
+    hourly_price: Optional[float] = None
 
 class RoomUpdate(BaseModel):
     name: Optional[str] = None
@@ -307,7 +312,9 @@ def create_room_type(req: RoomTypeCreate, context: dict = Depends(get_user_conte
         tenant_id=context["tenant_id"],
         name=req.name,
         base_price=req.base_price,
-        capacity=req.capacity
+        capacity=req.capacity,
+        day_use_price=req.day_use_price,
+        hourly_price=req.hourly_price
     )
     db.add(new_rt)
     db.commit()
@@ -324,6 +331,8 @@ def update_room_type(rt_id: str, req: RoomTypeUpdate, context: dict = Depends(ge
     if req.name is not None: rt.name = req.name
     if req.base_price is not None: rt.base_price = req.base_price
     if req.capacity is not None: rt.capacity = req.capacity
+    if req.day_use_price is not None: rt.day_use_price = req.day_use_price
+    if req.hourly_price is not None: rt.hourly_price = req.hourly_price
     
     db.commit()
     db.refresh(rt)
@@ -423,7 +432,7 @@ def create_booking(req: BookingCreate, context: dict = Depends(get_user_context)
     new_check_in = datetime.fromisoformat(req.check_in.replace("Z", "").split("+")[0])
     new_check_out = datetime.fromisoformat(req.check_out.replace("Z", "").split("+")[0])
 
-    if new_check_out <= new_check_in:
+    if new_check_out < new_check_in:
         raise HTTPException(status_code=400, detail="Checkout date must be after check-in date")
 
     # Housekeeping status check
@@ -643,9 +652,8 @@ def extend_booking(booking_id: str, req: BookingExtend, context: dict = Depends(
             detail=f"Room is already reserved by guest '{conflicting.guest_name}' on the requested extension dates."
         )
 
-    # Calculate additional price
-    diff_seconds = (new_checkout_dt - current_check_out).total_seconds()
-    extra_nights = max(1, int(round(diff_seconds / (24 * 3600))))
+    # Calculate additional price based on calendar date difference
+    extra_nights = max(1, (new_checkout_dt.date() - current_check_out.date()).days)
 
     room = db.query(Room).filter(Room.id == booking.room_id).first()
     room_type = db.query(RoomType).filter(RoomType.id == room.room_type_id).first() if room else None
