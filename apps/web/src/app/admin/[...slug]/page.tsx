@@ -6,6 +6,9 @@ export default async function AdminSlugFallbackPage({
   params: Promise<{ slug?: string[] }>;
 }) {
   const { slug } = await params;
-  const path = slug && slug.length > 0 ? slug.join('/') : '';
+  let path = slug && slug.length > 0 ? slug.join('/') : '';
+  if (path === 'calender' || path === 'master-calendar' || path === 'master-calender') {
+    path = 'calendar';
+  }
   redirect(`/hotelflora/admin${path ? `/${path}` : ''}`);
 }

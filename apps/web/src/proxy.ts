@@ -31,26 +31,78 @@ export function proxy(req: NextRequest) {
     .replace(".localhost", "")
     .replace(".restopia.in", "");
 
-  // Direct localhost, IP address, or base domain access
-  if (
+  const isLocalOrBase = 
     isIpAddress ||
     currentHost === "localhost" || 
     currentHost === "127.0.0.1" || 
-    currentHost === "restopia.in"
-  ) {
+    currentHost === "restopia.in";
+
+  // Helper to normalize calendar typos and aliases
+  let cleanPath = url.pathname;
+  cleanPath = cleanPath.replace(/\/(calender|master-calendar|master-calender|mastercalendar|mastercalender)/g, '/calendar');
+
+  // Known admin subroutes
+  const knownAdminSections = [
+    'calendar', 'rooms', 'housekeeping', 'staff', 'guests', 'billing', 'settings'
+  ];
+
+  // Direct localhost, IP address, or base domain access
+  if (isLocalOrBase) {
     if (url.pathname === "/") {
       return NextResponse.redirect(new URL("/hotelflora/admin", req.url));
     }
-    if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
-      const targetPath = url.pathname.replace(/^\/admin/, "/hotelflora/admin");
-      return NextResponse.redirect(new URL(targetPath, req.url));
+    // Handle /hotelflora root
+    if (url.pathname === "/hotelflora" || url.pathname === "/hotelflora/") {
+      return NextResponse.redirect(new URL("/hotelflora/admin", req.url));
     }
+    // Handle typos or direct section under /hotelflora/...
+    if (url.pathname.startsWith("/hotelflora/")) {
+      const rest = url.pathname.replace(/^\/hotelflora\//, '');
+      if (rest === "calender" || rest === "master-calendar" || rest === "master-calender") {
+        return NextResponse.redirect(new URL("/hotelflora/admin/calendar", req.url));
+      }
+      if (rest.startsWith("admin/calender") || rest.startsWith("admin/master-calendar")) {
+        return NextResponse.redirect(new URL("/hotelflora/admin/calendar", req.url));
+      }
+      if (knownAdminSections.includes(rest)) {
+        return NextResponse.redirect(new URL(`/hotelflora/admin/${rest}`, req.url));
+      }
+      return NextResponse.next();
+    }
+    // Handle /admin or /admin/...
+    if (url.pathname === "/admin" || url.pathname === "/admin/") {
+      return NextResponse.redirect(new URL("/hotelflora/admin", req.url));
+    }
+    if (url.pathname.startsWith("/admin/")) {
+      const section = cleanPath.replace(/^\/admin\//, '');
+      return NextResponse.redirect(new URL(`/hotelflora/admin/${section}`, req.url));
+    }
+    // Handle direct top-level sections e.g. /calendar, /rooms, /calender
+    const topSection = cleanPath.replace(/^\//, '').split('/')[0];
+    if (knownAdminSections.includes(topSection)) {
+      const rest = cleanPath.replace(/^\/[^/]+/, '');
+      return NextResponse.redirect(new URL(`/hotelflora/admin/${topSection}${rest}`, req.url));
+    }
+
     return NextResponse.next();
   }
 
   // Subdomain root redirect to /admin (e.g. hotelflora.localhost/ -> hotelflora.localhost/admin)
   if (url.pathname === "/") {
     return NextResponse.redirect(new URL("/admin", req.url));
+  }
+
+  // Normalize subdomain typos (e.g. /admin/calender -> /admin/calendar, /calender -> /admin/calendar)
+  const subSection = cleanPath.replace(/^\/(admin\/)?/, '').split('/')[0];
+  if (url.pathname.includes('calender') || url.pathname.includes('master-calendar') || url.pathname.includes('mastercalender')) {
+    return NextResponse.redirect(new URL(`/admin/calendar`, req.url));
+  }
+
+  // If path is a top-level section on subdomain e.g. hotelflora.localhost/calendar -> rewrite to /hotelflora/admin/calendar
+  if (knownAdminSections.includes(url.pathname.replace(/^\//, '').split('/')[0])) {
+    const sec = url.pathname.replace(/^\//, '');
+    url.pathname = `/${currentHost}/admin/${sec}`;
+    return NextResponse.rewrite(url);
   }
 
   // If the pathname already starts with the tenant subdomain path (e.g. /hotelflora/admin/rooms),
