@@ -932,13 +932,13 @@ export default function CalendarPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-6 relative">
-        <div className="inline-block min-w-full bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-800">
-          <div className="flex sticky top-0 z-10 bg-gray-100 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
+        <div className="w-full bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-800">
+          <div className="flex sticky top-0 z-10 bg-gray-100 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700 w-full">
             <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-100 dark:bg-zinc-800 border-r border-gray-200 dark:border-zinc-700 p-3 font-semibold text-sm">Room</div>
             {dates.map((date, i) => (
-              <div key={i} className="w-32 flex-shrink-0 border-r border-gray-200 dark:border-zinc-700 p-3 text-center text-sm">
+              <div key={i} className="flex-1 min-w-0 border-r border-gray-200 dark:border-zinc-700 p-3 text-center text-sm">
                 <div className="font-semibold">{date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                <div className="text-zinc-500">{date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}</div>
+                <div className="text-zinc-500 truncate">{date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}</div>
               </div>
             ))}
           </div>
@@ -956,7 +956,7 @@ export default function CalendarPage() {
             return (
               <React.Fragment key={type.id}>
                 {/* Summary Row */}
-                <div className="flex border-b border-gray-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/30 group">
+                <div className="flex border-b border-gray-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/30 group w-full">
                   <div
                     className="w-48 flex-shrink-0 sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800/90 border-r border-gray-200 dark:border-zinc-700 p-3 font-bold text-sm cursor-pointer flex items-center gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
                     onClick={() => toggleTypeExpansion(type.id)}
@@ -971,13 +971,13 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={i}
-                        className={`w-32 flex-shrink-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-14 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors ${occupancyRate === 1 ? 'bg-red-50/50 dark:bg-red-900/10' : occupancyRate > 0.5 ? 'bg-orange-50/30 dark:bg-orange-900/10' : 'bg-emerald-50/20 dark:bg-emerald-900/5'}`}
+                        className={`flex-1 min-w-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-14 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors ${occupancyRate === 1 ? 'bg-red-50/50 dark:bg-red-900/10' : occupancyRate > 0.5 ? 'bg-orange-50/30 dark:bg-orange-900/10' : 'bg-emerald-50/20 dark:bg-emerald-900/5'}`}
                         onClick={() => toggleTypeExpansion(type.id)}
                       >
-                        <span className={`text-sm font-bold ${available === 0 ? 'text-red-500' : available < 3 ? 'text-orange-500' : 'text-emerald-500'}`}>
+                        <span className={`text-sm font-bold truncate ${available === 0 ? 'text-red-500' : available < 3 ? 'text-orange-500' : 'text-emerald-500'}`}>
                           {available} Available
                         </span>
-                        <span className="text-xs text-zinc-400">{total} Total</span>
+                        <span className="text-xs text-zinc-400 truncate">{total} Total</span>
                       </div>
                     )
                   })}
@@ -988,7 +988,7 @@ export default function CalendarPage() {
                   roomsOfType
                     .filter((r: any) => searchTerm === '' || r.name.toLowerCase().includes(searchTerm.toLowerCase()) || isTypeMatch)
                     .map((room: any) => (
-                      <div key={room.id} className="flex border-b border-gray-100 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                      <div key={room.id} className="flex border-b border-gray-100 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 w-full">
                         <div className="w-48 flex-shrink-0 sticky left-0 z-10 bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/50 border-r border-gray-200 dark:border-zinc-700 p-3 pl-8 text-sm font-medium transition-colors">
                           {room.name}
                         </div>
@@ -999,7 +999,7 @@ export default function CalendarPage() {
                           return (
                             <div
                               key={i}
-                              className={`w-32 flex-shrink-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-16 transition-colors ${
+                              className={`flex-1 min-w-0 border-r border-gray-100 dark:border-zinc-800 relative p-1 h-16 transition-colors ${
                                 booking
                                   ? 'bg-zinc-50/80 dark:bg-zinc-950/50 cursor-pointer'
                                   : 'hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer'
