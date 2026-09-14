@@ -1595,7 +1595,7 @@ export default function CalendarPage() {
                     {newBooking.check_out === formatDateToInput(bookingModal.date)
                       ? (newBooking.stay_type === 'hourly' || (isHourlyEnabled && !isDayUseEnabled)
                           ? `${newBooking.hours_of_stay} Hour(s) Hourly Stay`
-                          : `Day Use Stay (${newBooking.hours_of_stay} Hours)`)
+                          : `Day Use Stay`)
                       : `${calculateNights()} ${calculateNights() === 1 ? 'Night' : 'Nights'} Stay`}
                   </span>
                 </div>
@@ -1638,7 +1638,7 @@ export default function CalendarPage() {
                         </select>
                       </div>
                     )}
-                    {(newBooking.check_out === formatDateToInput(bookingModal.date) || newBooking.stay_type !== 'overnight') && (
+                    {(newBooking.stay_type === 'hourly' || (!isDayUseEnabled && isHourlyEnabled && (newBooking.check_out === formatDateToInput(bookingModal.date) || newBooking.stay_type !== 'overnight'))) && (
                       <div className="space-y-1.5 col-span-1">
                         <span className="text-[10px] font-bold text-zinc-500 ml-1">Hours of Stay</span>
                         <select

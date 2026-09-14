@@ -122,7 +122,7 @@ export default function RoomsManagementPage() {
           </div>
           {isDayUseEnabled && (
             <div>
-              <label className="text-sm font-medium text-zinc-500 mb-1 block">Day Use Rate (INR)</label>
+              <label className="text-sm font-medium text-zinc-500 mb-1 block">Day Use Rate (per day)</label>
               <input
                 type="number"
                 className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700"
@@ -134,7 +134,7 @@ export default function RoomsManagementPage() {
           )}
           {isHourlyEnabled && (
             <div>
-              <label className="text-sm font-medium text-zinc-500 mb-1 block">Hourly Rate (INR)</label>
+              <label className="text-sm font-medium text-zinc-500 mb-1 block">Hourly Use Rate(per hour)</label>
               <input
                 type="number"
                 className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700"
@@ -166,8 +166,8 @@ export default function RoomsManagementPage() {
               <tr>
                 <th className="font-semibold p-3 text-left">Name</th>
                 <th className="font-semibold p-3 text-left">Base Price</th>
-                {isDayUseEnabled && <th className="font-semibold p-3 text-left">Day Use Rate</th>}
-                {isHourlyEnabled && <th className="font-semibold p-3 text-left">Hourly Rate</th>}
+                {isDayUseEnabled && <th className="font-semibold p-3 text-left">Day Use Rate (per day)</th>}
+                {isHourlyEnabled && <th className="font-semibold p-3 text-left">Hourly Use Rate(per hour)</th>}
                 <th className="font-semibold p-3 text-left">Capacity</th>
                 <th className="font-semibold p-3 text-right">Actions</th>
               </tr>

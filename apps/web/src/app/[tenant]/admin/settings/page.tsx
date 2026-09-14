@@ -8,6 +8,7 @@ import {
   Briefcase, Landmark, Wallet, CreditCard, Layout, Hash,
   Image as ImageIcon, Computer, Palette, Loader2
 } from 'lucide-react';
+import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 // API Helpers
@@ -20,9 +21,9 @@ const fetchApi = async <T,>(tenant: string, path: string, options?: RequestInit)
   return res.json();
 };
 
-export default function SettingsPage({ params }: { params: Promise<{ tenant: string }> }) {
-  const resolvedParams = React.use(params);
-  const { tenant } = resolvedParams;
+export default function SettingsPage() {
+  const params = useParams();
+  const tenant = (params?.tenant as string) || 'hotelflora';
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'financials' | 'system'>('profile');
   
