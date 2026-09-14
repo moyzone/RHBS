@@ -60,12 +60,24 @@ export default function RoomsManagementPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['roomTypes', tenant] });
       setNewRoomType({ name: '', base_price: '', capacity: 2, day_use_price: '', hourly_price: '' });
-    }
+    },
+    onError: (err: any) => setModal({
+      isOpen: true,
+      title: "Creation Failed",
+      message: err.message || "Failed to create room type. Please check your inputs and try again.",
+      type: 'danger'
+    })
   });
 
   const updateRTMutation = useMutation({
     mutationFn: (rt: any) => fetchApi(tenant, `/room-types/${rt.id}`, { method: 'PATCH', body: JSON.stringify(rt) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['roomTypes', tenant] }); setEditingRTId(null); }
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['roomTypes', tenant] }); setEditingRTId(null); },
+    onError: (err: any) => setModal({
+      isOpen: true,
+      title: "Update Failed",
+      message: err.message || "Failed to update room type.",
+      type: 'danger'
+    })
   });
 
   const deleteRTMutation = useMutation({
@@ -81,12 +93,24 @@ export default function RoomsManagementPage() {
 
   const createRoomMutation = useMutation({
     mutationFn: (r: any) => fetchApi(tenant, '/rooms', { method: 'POST', body: JSON.stringify(r) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms', tenant] }); setNewRoom({ name: '', room_type_id: '' }) }
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms', tenant] }); setNewRoom({ name: '', room_type_id: '' }) },
+    onError: (err: any) => setModal({
+      isOpen: true,
+      title: "Creation Failed",
+      message: err.message || "Failed to create physical room.",
+      type: 'danger'
+    })
   });
 
   const updateRoomMutation = useMutation({
     mutationFn: (r: any) => fetchApi(tenant, `/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify(r) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms', tenant] }); setEditingRoomId(null); }
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms', tenant] }); setEditingRoomId(null); },
+    onError: (err: any) => setModal({
+      isOpen: true,
+      title: "Update Failed",
+      message: err.message || "Failed to update physical room.",
+      type: 'danger'
+    })
   });
 
   const deleteRoomMutation = useMutation({
@@ -99,6 +123,15 @@ export default function RoomsManagementPage() {
       type: 'danger'
     })
   });
+
+  const isValidNewRoomType =
+    Boolean(newRoomType.name.trim()) &&
+    newRoomType.base_price !== '' &&
+    !isNaN(Number(newRoomType.base_price)) &&
+    Number(newRoomType.base_price) > 0 &&
+    newRoomType.capacity !== '' &&
+    !isNaN(Number(newRoomType.capacity)) &&
+    Number(newRoomType.capacity) > 0;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
@@ -149,14 +182,33 @@ export default function RoomsManagementPage() {
             <input type="number" className="w-full border rounded-lg p-2 dark:bg-zinc-800 dark:border-zinc-700" value={newRoomType.capacity} onChange={e => setNewRoomType({ ...newRoomType, capacity: e.target.value === '' ? '' : Number(e.target.value) })}/>
           </div>
           <button 
-            onClick={() => createRTMutation.mutate({
-              ...newRoomType,
-              day_use_price: newRoomType.day_use_price !== '' ? Number(newRoomType.day_use_price) : undefined,
-              hourly_price: newRoomType.hourly_price !== '' ? Number(newRoomType.hourly_price) : undefined
-            })}
-            className="bg-[var(--theme-color,#4f46e5)] hover:opacity-90 text-white font-medium rounded-lg px-4 py-2 h-[42px] flex items-center"
+            disabled={!isValidNewRoomType || createRTMutation.isPending}
+            onClick={() => {
+              if (!isValidNewRoomType) return;
+              createRTMutation.mutate({
+                name: newRoomType.name.trim(),
+                base_price: Number(newRoomType.base_price),
+                capacity: Number(newRoomType.capacity || 2),
+                day_use_price: newRoomType.day_use_price !== '' && newRoomType.day_use_price !== null && !isNaN(Number(newRoomType.day_use_price))
+                  ? Number(newRoomType.day_use_price)
+                  : undefined,
+                hourly_price: newRoomType.hourly_price !== '' && newRoomType.hourly_price !== null && !isNaN(Number(newRoomType.hourly_price))
+                  ? Number(newRoomType.hourly_price)
+                  : undefined
+              });
+            }}
+            className="bg-[var(--theme-color,#4f46e5)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 h-[42px] flex items-center transition-all"
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Type
+            {createRTMutation.isPending ? (
+              <span className="flex items-center">
+                <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                Adding...
+              </span>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" /> Add Type
+              </>
+            )}
           </button>
         </div>
 
