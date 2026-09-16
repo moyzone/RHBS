@@ -126,6 +126,11 @@ export default function BillingPage() {
       setReviewingBooking(null);
       queryClient.invalidateQueries({ queryKey: ['invoices', tenant] });
       queryClient.invalidateQueries({ queryKey: ['bookings', tenant] });
+    },
+    onError: (err: any) => {
+      const msg = err.message || "Failed to generate invoice. Please ensure all line item descriptions are non-empty and amounts are greater than 0.";
+      alert(`Invoice Generation Blocked: ${msg}`);
+      console.error("Generate Invoice Error:", err);
     }
   });
 
@@ -139,9 +144,22 @@ export default function BillingPage() {
   const removeReviewItem = (index: number) => setEditItems(editItems.filter((_, i) => i !== index));
   const updateReviewItem = (index: number, field: 'type' | 'description' | 'amount', value: string) => {
     const newItems = [...editItems];
-    newItems[index] = { ...newItems[index], [field]: value };
+    let sanitizedVal = value;
+    if (field === 'amount') {
+      sanitizedVal = value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1');
+    }
+    newItems[index] = { ...newItems[index], [field]: sanitizedVal };
     setEditItems(newItems);
   };
+
+  const isReviewItemValid = (item: { description: string; amount: string }) => {
+    const isDescValid = item.description.trim() !== '';
+    const numAmt = Number(item.amount);
+    const isAmtValid = item.amount !== '' && !isNaN(numAmt) && numAmt > 0;
+    return isDescValid && isAmtValid;
+  };
+
+  const isReviewFormValid = editItems.length > 0 && editItems.every(isReviewItemValid);
 
   const currentSubtotal = editItems.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
   const currentGstRate = currentSubtotal >= 7500 ? 18 : 5;
@@ -1060,16 +1078,32 @@ export default function BillingPage() {
                                    value={item.description}
                                    onChange={(e) => updateReviewItem(idx, 'description', e.target.value)}
                                    placeholder="Item name (e.g. Laundry)"
-                                   className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 rounded-xl py-2 px-3 text-xs font-bold focus:border-indigo-500 outline-none transition-all placeholder-zinc-300 dark:placeholder-zinc-700"
+                                   className={cn(
+                                     "w-full bg-zinc-50 dark:bg-zinc-950 border-2 rounded-xl py-2 px-3 text-xs font-bold outline-none transition-all placeholder-zinc-300 dark:placeholder-zinc-700",
+                                     item.description.trim() === ''
+                                       ? "border-rose-400 dark:border-rose-500 focus:border-rose-500"
+                                       : "border-zinc-100 dark:border-zinc-800 focus:border-indigo-500"
+                                   )}
                                  />
                               </div>
                               <div className="w-24 relative">
                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-400">₹</span>
                                  <input 
-                                   type="number"
+                                   type="text"
+                                   inputMode="decimal"
                                    value={item.amount}
+                                   onKeyDown={(e) => {
+                                     if (['+', '-', 'e', 'E', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '=', '/', '?'].includes(e.key)) {
+                                       e.preventDefault();
+                                     }
+                                   }}
                                    onChange={(e) => updateReviewItem(idx, 'amount', e.target.value)}
-                                   className="w-full bg-zinc-50 dark:bg-zinc-950 border-2 border-zinc-100 dark:border-zinc-800 rounded-xl py-2 pl-6 pr-2 text-xs font-black focus:border-indigo-500 outline-none transition-all"
+                                   className={cn(
+                                     "w-full bg-zinc-50 dark:bg-zinc-950 border-2 rounded-xl py-2 pl-6 pr-2 text-xs font-black outline-none transition-all",
+                                     item.amount === '' || isNaN(Number(item.amount)) || Number(item.amount) <= 0
+                                       ? "border-rose-400 dark:border-rose-500 focus:border-rose-500"
+                                       : "border-zinc-100 dark:border-zinc-800 focus:border-indigo-500"
+                                   )}
                                  />
                               </div>
                               {idx > 0 && (
@@ -1107,16 +1141,22 @@ export default function BillingPage() {
                     />
                  </div>
 
+                 {!isReviewFormValid && (
+                    <p className="text-[10px] font-black text-rose-500 text-center tracking-tight">
+                       Please enter a valid description and positive amount (&gt; ₹0) for all line items.
+                    </p>
+                 )}
+
                  <button 
                    onClick={() => generateInvoice.mutate({ 
                       bookingId: reviewingBooking.id, 
                       data: { 
-                         items: editItems.map(it => ({ type: it.type, description: it.description, amount: parseFloat(it.amount) || 0 })), 
+                         items: editItems.map(it => ({ type: it.type, description: it.description.trim(), amount: parseFloat(it.amount) || 0 })), 
                          bill_notes: editNotes 
                       } 
                    })}
-                   disabled={generateInvoice.isPending}
-                   className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                   disabled={!isReviewFormValid || generateInvoice.isPending}
+                   className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-2"
                  >
                     {generateInvoice.isPending ? 'Syncing Ledger...' : 'Finalize & Seal Itemized Bill'}
                  </button>
