@@ -6,7 +6,7 @@ import {
   Building2, Users, Shield, MapPin, 
   Globe, Mail, Phone, Plus, Edit2, Check, X,
   Briefcase, Landmark, Wallet, CreditCard, Layout, Hash,
-  Image as ImageIcon, Computer, Palette, Loader2
+  Image as ImageIcon, Computer, Palette, Loader2, Calendar, Sun, Clock
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -248,26 +248,51 @@ export default function SettingsPage() {
 
         {activeTab === 'system' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card sectionIcon={Computer} title="POS & Integrations">
-               <div className="grid gap-6">
-                  <Field label="Primary POS System" value={settings?.pos_system_name || 'Not Set'} onSave={(val) => updateSettings.mutate({ pos_system_name: val })} />
-                  <Field label="POS API Key" value={settings?.pos_api_key || '••••••••'} onSave={(val) => updateSettings.mutate({ pos_api_key: val })} />
-               </div>
-            </Card>
+            <div className="space-y-8">
+              <Card sectionIcon={Calendar} title="Booking & Room Configuration">
+                 <div className="grid gap-4">
+                    <SwitchField 
+                      label="Enable Day Use Booking"
+                      description="Allow guests to book rooms for daytime occupancy without overnight stay."
+                      enabled={settings?.enable_day_use === 'true' || settings?.enable_day_use === true || settings?.enable_day_use === undefined}
+                      onToggle={(val) => updateSettings.mutate({ enable_day_use: val ? 'true' : 'false' })}
+                      icon={Sun}
+                      disabled={updateSettings.isPending}
+                    />
+                    <SwitchField 
+                      label="Enable Hourly Booking"
+                      description="Allow micro-stays billed on an hourly basis."
+                      enabled={settings?.enable_hourly_use === 'true' || settings?.enable_hourly_use === true || settings?.enable_hourly_use === undefined}
+                      onToggle={(val) => updateSettings.mutate({ enable_hourly_use: val ? 'true' : 'false' })}
+                      icon={Clock}
+                      disabled={updateSettings.isPending}
+                    />
+                 </div>
+              </Card>
 
-            <Card sectionIcon={Palette} title="System Theming">
-               <div className="grid gap-6">
-                  <div className="flex items-center gap-4">
-                     <div 
-                        className="w-16 h-16 rounded-full shadow-inner border-4 border-white"
-                        style={{ backgroundColor: settings?.theme_color || '#4f46e5' }}
-                     />
-                     <div className="flex-1">
-                        <Field label="Brand HEX Color" value={settings?.theme_color || '#4f46e5'} onSave={(val) => updateSettings.mutate({ theme_color: val })} />
-                     </div>
-                  </div>
-               </div>
-            </Card>
+              <Card sectionIcon={Computer} title="POS & Integrations">
+                 <div className="grid gap-6">
+                    <Field label="Primary POS System" value={settings?.pos_system_name || 'Not Set'} onSave={(val) => updateSettings.mutate({ pos_system_name: val })} />
+                    <Field label="POS API Key" value={settings?.pos_api_key || '••••••••'} onSave={(val) => updateSettings.mutate({ pos_api_key: val })} />
+                 </div>
+              </Card>
+            </div>
+
+            <div className="space-y-8">
+              <Card sectionIcon={Palette} title="System Theming">
+                 <div className="grid gap-6">
+                    <div className="flex items-center gap-4">
+                       <div 
+                          className="w-16 h-16 rounded-full shadow-inner border-4 border-white"
+                          style={{ backgroundColor: settings?.theme_color || '#4f46e5' }}
+                       />
+                       <div className="flex-1">
+                          <Field label="Brand HEX Color" value={settings?.theme_color || '#4f46e5'} onSave={(val) => updateSettings.mutate({ theme_color: val })} />
+                       </div>
+                    </div>
+                 </div>
+              </Card>
+            </div>
           </div>
         )}
 
@@ -389,6 +414,56 @@ function ChecklistItem({ label, isSet }: { label: string, isSet: boolean }) {
        <div className={cn("flex items-center justify-center w-5 h-5 rounded-full border-2", isSet ? "border-emerald-500 bg-emerald-50" : "border-red-400 bg-red-50 text-red-500")}>
           {isSet ? <Check className="w-3 h-3 text-emerald-500" /> : <span className="text-xs font-black">!</span>}
        </div>
+    </div>
+  );
+}
+
+function SwitchField({ 
+  label, 
+  description, 
+  enabled, 
+  onToggle, 
+  icon: Icon,
+  disabled
+}: { 
+  label: string; 
+  description: string; 
+  enabled: boolean; 
+  onToggle: (state: boolean) => void; 
+  icon?: any;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between p-4 bg-zinc-50/50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700 transition-all">
+      <div className="flex items-start gap-3.5 pr-4">
+        {Icon && (
+          <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-[var(--theme-color,#4f46e5)] shrink-0 mt-0.5">
+            <Icon className="w-4 h-4" />
+          </div>
+        )}
+        <div>
+          <h4 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-100">{label}</h4>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">{description}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        disabled={disabled}
+        onClick={() => onToggle(!enabled)}
+        className={cn(
+          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 disabled:opacity-50",
+          enabled ? "bg-[var(--theme-color,#4f46e5)]" : "bg-zinc-200 dark:bg-zinc-700"
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+            enabled ? "translate-x-5" : "translate-x-0"
+          )}
+        />
+      </button>
     </div>
   );
 }

@@ -23,6 +23,8 @@ def initialize_database():
             conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS country VARCHAR;"))
             conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS address VARCHAR;"))
             conn.execute(text("ALTER TABLE guests ADD COLUMN IF NOT EXISTS pincode VARCHAR;"))
+            conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS enable_day_use VARCHAR DEFAULT 'true';"))
+            conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS enable_hourly_use VARCHAR DEFAULT 'true';"))
             conn.commit()
 
             tables_with_tenant = ['users', 'room_types', 'rooms', 'bookings', 'invoices']
@@ -66,7 +68,7 @@ def initialize_database():
             tenant = session.query(Tenant).filter_by(id=t_data["id"]).first()
             if not tenant:
                 print(f"Creating tenant {t_data['id']}...")
-                tenant = Tenant(id=t_data["id"], name=t_data["name"], theme_color=t_data["color"])
+                tenant = Tenant(id=t_data["id"], name=t_data["name"], theme_color=t_data["color"], enable_day_use="true", enable_hourly_use="true")
                 session.add(tenant)
                 session.flush()
                 

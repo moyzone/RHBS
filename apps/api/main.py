@@ -217,6 +217,10 @@ class TenantUpdate(BaseModel):
     social_instagram: Optional[str] = None
     video_link: Optional[str] = None
 
+    # Feature Toggles / Booking Controls
+    enable_day_use: Optional[Union[bool, str]] = None
+    enable_hourly_use: Optional[Union[bool, str]] = None
+
 class AdminUserCreate(BaseModel):
     email: str
     name: str
@@ -990,6 +994,8 @@ async def update_settings(tenant_id: str, data: TenantUpdate, context: dict = De
     
     update_data = data.dict(exclude_unset=True)
     for key, value in update_data.items():
+        if isinstance(value, bool):
+            value = "true" if value else "false"
         setattr(tenant, key, value)
     
     db.commit()
