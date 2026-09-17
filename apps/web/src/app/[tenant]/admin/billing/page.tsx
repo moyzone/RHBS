@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
 import { useParams } from 'next/navigation';
-import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone, ArrowUpDown } from 'lucide-react';
+import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone, ArrowUpDown, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function BillingPage() {
@@ -152,8 +152,20 @@ export default function BillingPage() {
   ).slice(0, 5);
 
 
-  const totalRevenue = invoices.reduce((acc: number, inv: any) => acc + parseFloat(inv.total_amount || 0), 0);
-  const totalGST = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.total_amount || 0) * 0.18 / 1.18), 0);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const currentMonthInvoices = invoices.filter((inv: any) => {
+    const dateStr = inv.created_at || inv.due_date;
+    if (!dateStr) return false;
+    const invDate = new Date(dateStr);
+    if (isNaN(invDate.getTime())) return false;
+    return invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth;
+  });
+
+  const totalRevenue = currentMonthInvoices.reduce((acc: number, inv: any) => acc + parseFloat(inv.total_amount || 0), 0);
+  const totalGST = currentMonthInvoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.total_amount || 0) * 0.18 / 1.18), 0);
 
   // Review System State (Restored)
   const [editItems, setEditItems] = useState<{type: string, description: string, amount: string}[]>([]);
@@ -305,14 +317,14 @@ export default function BillingPage() {
                 <div className="text-4xl font-black mt-2 tracking-tighter">₹{totalRevenue.toLocaleString()}</div>
                 <div className="mt-4 flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-tight">
                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                   Live Transaction Data
+                   Current Month Revenue
                 </div>
              </div>
              <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500 opacity-[0.03] rounded-bl-full transition-transform group-hover:scale-110"></div>
-                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">GST Tax Collected</span>
+                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">GST Tax Collected (This Month)</span>
                 <div className="text-4xl font-black mt-2 tracking-tighter text-indigo-600">₹{totalGST.toLocaleString()}</div>
-                <div className="mt-4 text-zinc-400 font-bold text-xs uppercase tracking-tight">Output Tax Liability</div>
+                <div className="mt-4 text-zinc-400 font-bold text-xs uppercase tracking-tight">Current Month Tax Liability</div>
              </div>
              <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500 opacity-[0.03] rounded-bl-full transition-transform group-hover:scale-110"></div>
@@ -390,7 +402,15 @@ export default function BillingPage() {
                              {b.guest_name}
                              <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 rounded-full uppercase tracking-tighter">{b.id}</span>
                           </div>
-                          <div className="text-xs font-bold text-[var(--theme-color,#4f46e5)] mt-1 tracking-tight">₹{parseFloat(b.total_price).toLocaleString()} • Space Allocated</div>
+                          <div className="text-xs font-bold text-[var(--theme-color,#4f46e5)] mt-1 tracking-tight flex items-center gap-2 flex-wrap">
+                             <span>₹{parseFloat(b.total_price).toLocaleString()} • Space Allocated</span>
+                             {b.check_out && (
+                               <span className="inline-flex items-center gap-1 text-zinc-500 dark:text-zinc-400 font-semibold bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 rounded-md text-[11px]">
+                                 <Calendar className="w-3 h-3 text-zinc-400" />
+                                 Checked out: {new Date(b.check_out).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                               </span>
+                             )}
+                          </div>
                         </td>
                         <td className="p-6 text-right">
                           <button 
