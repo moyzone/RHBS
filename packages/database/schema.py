@@ -86,6 +86,10 @@ class Tenant(Base):
     social_instagram = Column(String, nullable=True)
     video_link = Column(String, nullable=True)
 
+    # Feature Toggles / Booking Controls
+    enable_day_use = Column(String, nullable=True, default="true")
+    enable_hourly_use = Column(String, nullable=True, default="true")
+
 
 class User(Base):
     __tablename__ = 'users'

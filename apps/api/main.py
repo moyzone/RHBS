@@ -217,6 +217,10 @@ class TenantUpdate(BaseModel):
     social_instagram: Optional[str] = None
     video_link: Optional[str] = None
 
+    # Feature Toggles / Booking Controls
+    enable_day_use: Optional[Union[bool, str]] = None
+    enable_hourly_use: Optional[Union[bool, str]] = None
+
 class AdminUserCreate(BaseModel):
     email: str
     name: str
@@ -680,11 +684,21 @@ def generate_gst_invoice(booking_id: str, req: Optional[InvoiceCreate] = Body(No
     if req and req.items:
         for item in req.items:
             if isinstance(item, dict):
-                desc = item.get("description") or item.get("name") or "Product/Service"
-                amt = float(item.get("amount", 0.0))
+                desc = str(item.get("description") or item.get("name") or "").strip()
+                try:
+                    amt = float(item.get("amount", 0.0))
+                except (ValueError, TypeError):
+                    amt = 0.0
             else:
-                desc = getattr(item, "description", "Product/Service")
-                amt = float(getattr(item, "amount", 0.0))
+                desc = str(getattr(item, "description", "") or getattr(item, "name", "") or "").strip()
+                try:
+                    amt = float(getattr(item, "amount", 0.0))
+                except (ValueError, TypeError):
+                    amt = 0.0
+
+            if not desc or amt <= 0:
+                raise HTTPException(400, "Each line item must have a valid non-empty description and an amount greater than 0.")
+
             line_items_data.append({"description": desc, "amount": amt})
         subtotal = float(req.subtotal) if (req and req.subtotal is not None) else sum(item["amount"] for item in line_items_data)
     elif req and req.subtotal is not None:
@@ -758,6 +772,16 @@ def create_universal_invoice(req: InvoiceCreate, context: dict = Depends(get_use
         set_rls_context(db, context["tenant_id"])
         
         items_list = req.items or []
+        for item in items_list:
+            if isinstance(item, dict):
+                desc = str(item.get("description") or item.get("name") or "").strip()
+                try:
+                    amt = float(item.get("amount", 0.0))
+                except (ValueError, TypeError):
+                    amt = 0.0
+                if not desc or amt <= 0:
+                    raise HTTPException(400, "Each line item must have a valid non-empty description and an amount greater than 0.")
+
         calculated_subtotal = req.subtotal if req.subtotal is not None else sum(float(item.get("amount", 0.0)) for item in items_list if isinstance(item, dict))
         calculated_gst_pct = req.gst_percentage if req.gst_percentage is not None else 12.0
         calculated_gst_amt = req.gst_amount if req.gst_amount is not None else (calculated_subtotal * calculated_gst_pct / 100.0)
@@ -990,6 +1014,8 @@ async def update_settings(tenant_id: str, data: TenantUpdate, context: dict = De
     
     update_data = data.dict(exclude_unset=True)
     for key, value in update_data.items():
+        if isinstance(value, bool):
+            value = "true" if value else "false"
         setattr(tenant, key, value)
     
     db.commit()

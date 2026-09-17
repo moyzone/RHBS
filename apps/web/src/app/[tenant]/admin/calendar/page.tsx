@@ -182,8 +182,10 @@ export default function CalendarPage() {
   const tenant = params.tenant as string;
   const qc = useQueryClient();
 
-  const isDayUseEnabled = process.env.NEXT_PUBLIC_ENABLE_DAY_USE === 'true';
-  const isHourlyEnabled = process.env.NEXT_PUBLIC_ENABLE_HOURLY_BOOKING === 'true';
+  const { data: settings } = useQuery({ queryKey: ['settings', tenant], queryFn: () => fetchApi<any>(tenant, '/settings') });
+
+  const isDayUseEnabled = settings?.enable_day_use === 'true' || settings?.enable_day_use === true || settings?.enable_day_use === undefined;
+  const isHourlyEnabled = settings?.enable_hourly_use === 'true' || settings?.enable_hourly_use === true || settings?.enable_hourly_use === undefined;
   const isSameDateAllowed = isDayUseEnabled || isHourlyEnabled;
 
   const [searchTerm, setSearchTerm] = useState('');
