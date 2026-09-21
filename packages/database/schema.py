@@ -203,3 +203,33 @@ class Staff(Base):
     status = Column(String, nullable=False, default="Active") # Active, Inactive
     designation = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class Expense(Base):
+    __tablename__ = 'expenses'
+    id = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey('tenants.id'), nullable=False)
+    
+    # Classification
+    expense_type = Column(String, nullable=False) # 'Operational', 'Booking Refund', 'Order Refund', 'Vendor Bill'
+    category = Column(String, nullable=False) # 'Utilities', 'Maintenance', 'F&B', 'OTA Commission', etc.
+    department = Column(String, nullable=True) # 'Front Desk', 'Kitchen', 'Housekeeping', 'Maintenance'
+    
+    # Financials
+    amount = Column(Float, nullable=False)
+    payment_mode = Column(String, nullable=False) # 'Cash', 'UPI', 'Bank Transfer', 'Credit Card', 'Wallet'
+    expense_status = Column(String, nullable=False, default="PAID") # 'PAID', 'PENDING', 'DRAFT'
+    
+    # Reference Links (Optional based on type)
+    booking_id = Column(String, ForeignKey('bookings.id'), nullable=True)
+    external_booking_ref = Column(String, nullable=True) # e.g., MMT / Booking.com PNR
+    invoice_id = Column(String, ForeignKey('invoices.id'), nullable=True)
+    supplier_name = Column(String, nullable=True)
+    receipt_no = Column(String, nullable=True)
+    receipt_image_url = Column(String, nullable=True)
+    
+    # Metadata
+    description = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    expense_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+

@@ -8,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../packages'))
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database.session import engine
-from database.schema import Base, Tenant, RoomType, Room, Booking, Invoice, User
+from database.schema import Base, Tenant, RoomType, Room, Booking, Invoice, User, Expense
 
 def initialize_database():
     print("Creating database tables...")
@@ -27,7 +27,7 @@ def initialize_database():
             conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS enable_hourly_use VARCHAR DEFAULT 'true';"))
             conn.commit()
 
-            tables_with_tenant = ['users', 'room_types', 'rooms', 'bookings', 'invoices']
+            tables_with_tenant = ['users', 'room_types', 'rooms', 'bookings', 'invoices', 'expenses']
             for table in tables_with_tenant:
                 conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;"))
                 conn.execute(text(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {table};"))

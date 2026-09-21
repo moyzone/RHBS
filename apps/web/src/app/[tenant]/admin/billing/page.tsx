@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
 import { useParams } from 'next/navigation';
-import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone, ArrowUpDown, Calendar } from 'lucide-react';
+import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone, ArrowUpDown, Calendar, DollarSign, TrendingDown, RotateCcw, Utensils, Filter, Paperclip, ExternalLink, Tag, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function BillingPage() {
@@ -41,6 +41,206 @@ export default function BillingPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [reviewingBooking, setReviewingBooking] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'invoices' | 'create-invoice' | 'expenses' | 'payments'>('invoices');
+  
+  // Expenses Queries & Mutations
+  const { data: expensesList = [], isLoading: isExpensesLoading } = useQuery({
+    queryKey: ['expenses', tenant],
+    queryFn: () => fetchApi<any[]>(tenant, '/expenses')
+  });
+
+  const { data: expenseSummary } = useQuery({
+    queryKey: ['expenses-summary', tenant],
+    queryFn: () => fetchApi<any>(tenant, '/expenses/summary')
+  });
+
+  // Expense Filters & Search State
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState('All');
+  const [expenseDepartmentFilter, setExpenseDepartmentFilter] = useState('All');
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('All');
+  const [expensePaymentModeFilter, setExpensePaymentModeFilter] = useState('All');
+
+  // Expense Modal State (Create / Edit)
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<any>(null);
+
+  // Modal Form State
+  const [expenseForm, setExpenseForm] = useState({
+    expense_type: 'Operational', // 'Operational', 'Booking Refund', 'Order Refund', 'Vendor Bill'
+    category: 'Utilities',
+    department: 'Front Desk',
+    amount: '',
+    payment_mode: 'UPI',
+    expense_status: 'PAID',
+    booking_id: '',
+    external_booking_ref: '',
+    invoice_id: '',
+    supplier_name: '',
+    receipt_no: '',
+    receipt_image_url: '',
+    description: '',
+    notes: '',
+    expense_date: new Date().toISOString().split('T')[0]
+  });
+
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+
+  const handleOpenAddExpense = () => {
+    setEditingExpense(null);
+    setExpenseForm({
+      expense_type: 'Operational',
+      category: 'Utilities',
+      department: 'Front Desk',
+      amount: '',
+      payment_mode: 'UPI',
+      expense_status: 'PAID',
+      booking_id: '',
+      external_booking_ref: '',
+      invoice_id: '',
+      supplier_name: '',
+      receipt_no: '',
+      receipt_image_url: '',
+      description: '',
+      notes: '',
+      expense_date: new Date().toISOString().split('T')[0]
+    });
+    setPreviewReceiptUrl(null);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleOpenEditExpense = (expense: any) => {
+    setEditingExpense(expense);
+    setExpenseForm({
+      expense_type: expense.expense_type || 'Operational',
+      category: expense.category || 'Utilities',
+      department: expense.department || 'Front Desk',
+      amount: expense.amount ? expense.amount.toString() : '',
+      payment_mode: expense.payment_mode || 'UPI',
+      expense_status: expense.expense_status || 'PAID',
+      booking_id: expense.booking_id || '',
+      external_booking_ref: expense.external_booking_ref || '',
+      invoice_id: expense.invoice_id || '',
+      supplier_name: expense.supplier_name || '',
+      receipt_no: expense.receipt_no || '',
+      receipt_image_url: expense.receipt_image_url || '',
+      description: expense.description || '',
+      notes: expense.notes || '',
+      expense_date: expense.expense_date ? expense.expense_date.split('T')[0] : new Date().toISOString().split('T')[0]
+    });
+    setPreviewReceiptUrl(expense.receipt_image_url || null);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingReceipt(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${tenant}/expenses/upload-receipt`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setExpenseForm(prev => ({ ...prev, receipt_image_url: data.url }));
+      setPreviewReceiptUrl(data.url);
+    } catch (err: any) {
+      alert(`Receipt Upload Error: ${err.message}`);
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
+
+  const createExpenseMutation = useMutation({
+    mutationFn: (data: any) => fetchApi(tenant, '/expenses', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses', tenant] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-summary', tenant] });
+      setIsExpenseModalOpen(false);
+    },
+    onError: (err: any) => {
+      alert(`Failed to save expense: ${err.message}`);
+    }
+  });
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => fetchApi(tenant, `/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses', tenant] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-summary', tenant] });
+      setIsExpenseModalOpen(false);
+    },
+    onError: (err: any) => {
+      alert(`Failed to update expense: ${err.message}`);
+    }
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: string) => fetchApi(tenant, `/expenses/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses', tenant] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-summary', tenant] });
+    },
+    onError: (err: any) => {
+      alert(`Failed to delete expense: ${err.message}`);
+    }
+  });
+
+  const handleSaveExpense = () => {
+    if (!expenseForm.description.trim()) {
+      alert("Please enter a description for the expense.");
+      return;
+    }
+    const numAmt = parseFloat(expenseForm.amount);
+    if (isNaN(numAmt) || numAmt <= 0) {
+      alert("Please enter a valid amount (> ₹0).");
+      return;
+    }
+
+    const payload = {
+      ...expenseForm,
+      amount: numAmt,
+      department: expenseForm.expense_type === 'Booking Refund' ? 'Front Desk' :
+                  expenseForm.expense_type === 'Order Refund' ? 'Kitchen' :
+                  expenseForm.department
+    };
+
+    if (editingExpense) {
+      updateExpenseMutation.mutate({ id: editingExpense.id, data: payload });
+    } else {
+      createExpenseMutation.mutate(payload);
+    }
+  };
+
+  const filteredExpenses = expensesList.filter((e: any) => {
+    if (expenseTypeFilter !== 'All' && e.expense_type !== expenseTypeFilter) return false;
+    if (expenseDepartmentFilter !== 'All' && e.department !== expenseDepartmentFilter) return false;
+    if (expenseCategoryFilter !== 'All' && e.category !== expenseCategoryFilter) return false;
+    if (expensePaymentModeFilter !== 'All' && e.payment_mode !== expensePaymentModeFilter) return false;
+    
+    if (expenseSearch.trim()) {
+      const term = expenseSearch.toLowerCase().trim();
+      const matchId = (e.id || '').toLowerCase().includes(term);
+      const matchDesc = (e.description || '').toLowerCase().includes(term);
+      const matchSupplier = (e.supplier_name || '').toLowerCase().includes(term);
+      const matchReceipt = (e.receipt_no || '').toLowerCase().includes(term);
+      const matchBooking = (e.booking_id || '').toLowerCase().includes(term);
+      const matchExtBooking = (e.external_booking_ref || '').toLowerCase().includes(term);
+      const matchInvoice = (e.invoice_id || '').toLowerCase().includes(term);
+      if (!matchId && !matchDesc && !matchSupplier && !matchReceipt && !matchBooking && !matchExtBooking && !matchInvoice) {
+        return false;
+      }
+    }
+    return true;
+  });
   
   // Awaiting Checkout Search & Sort State
   const [awaitingSearchTerm, setAwaitingSearchTerm] = useState('');
@@ -83,6 +283,53 @@ export default function BillingPage() {
       }
       if (awaitingSortBy === 'name-desc') {
         return (b.guest_name || '').localeCompare(a.guest_name || '');
+      }
+      return 0;
+    });
+
+  // Finalized Invoices Search & Sort State
+  const [finalizedSearchTerm, setFinalizedSearchTerm] = useState('');
+  const [finalizedSortBy, setFinalizedSortBy] = useState<'newest' | 'oldest' | 'amount-desc' | 'amount-asc' | 'name-asc' | 'name-desc'>('newest');
+
+  const filteredAndSortedFinalizedInvoices = invoices
+    .filter((inv: any) => {
+      const term = finalizedSearchTerm.toLowerCase().trim();
+      if (!term) return true;
+      const guestName = (inv.booking?.guest_name || '').toLowerCase();
+      const invoiceId = (inv.id || '').toLowerCase();
+      const roomName = (inv.booking?.room?.name || '').toLowerCase();
+      const amountStr = (inv.total_amount || '').toString();
+      const paymentModeStr = (inv.payment_mode || '').toLowerCase();
+      return (
+        guestName.includes(term) ||
+        invoiceId.includes(term) ||
+        roomName.includes(term) ||
+        amountStr.includes(term) ||
+        paymentModeStr.includes(term)
+      );
+    })
+    .sort((a: any, b: any) => {
+      if (finalizedSortBy === 'newest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      }
+      if (finalizedSortBy === 'oldest') {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateA - dateB;
+      }
+      if (finalizedSortBy === 'amount-desc') {
+        return (parseFloat(b.total_amount) || 0) - (parseFloat(a.total_amount) || 0);
+      }
+      if (finalizedSortBy === 'amount-asc') {
+        return (parseFloat(a.total_amount) || 0) - (parseFloat(b.total_amount) || 0);
+      }
+      if (finalizedSortBy === 'name-asc') {
+        return (a.booking?.guest_name || '').localeCompare(b.booking?.guest_name || '');
+      }
+      if (finalizedSortBy === 'name-desc') {
+        return (b.booking?.guest_name || '').localeCompare(a.booking?.guest_name || '');
       }
       return 0;
     });
@@ -437,9 +684,53 @@ export default function BillingPage() {
 
             {/* History Section */}
             <div className="space-y-6">
-              <h2 className="text-xl font-black tracking-tight flex items-center gap-2 uppercase text-zinc-400 text-xs">
-                Finalized Invoices History
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h2 className="text-xl font-black tracking-tight flex items-center gap-2 uppercase text-zinc-400 text-xs">
+                  Finalized Invoices History
+                  <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2.5 py-0.5 rounded-full text-[10px] font-black">
+                    {filteredAndSortedFinalizedInvoices.length}
+                  </span>
+                </h2>
+              </div>
+
+              {/* Search & Sort Controls */}
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Search guest, ID, or amount..."
+                    value={finalizedSearchTerm}
+                    onChange={(e) => setFinalizedSearchTerm(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-9 pr-8 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 shadow-sm transition-all placeholder-zinc-400"
+                  />
+                  {finalizedSearchTerm && (
+                    <button
+                      onClick={() => setFinalizedSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                  <ArrowUpDown className="w-4 h-4 text-zinc-400 shrink-0 hidden sm:block" />
+                  <select
+                    value={finalizedSortBy}
+                    onChange={(e: any) => setFinalizedSortBy(e.target.value)}
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-extrabold text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 cursor-pointer w-full sm:w-auto shadow-sm"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="amount-desc">Amount: High to Low</option>
+                    <option value="amount-asc">Amount: Low to High</option>
+                    <option value="name-asc">Guest: A to Z</option>
+                    <option value="name-desc">Guest: Z to A</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b">
@@ -449,30 +740,34 @@ export default function BillingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {isInvoicesLoading ? <tr><td colSpan={2} className="p-8 text-center animate-pulse">Syncing history...</td></tr> : [...invoices].sort((a,b) => {
-                      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                      return dateB - dateA;
-                    }).map((inv: any) => (
-                      <tr key={inv.id} 
-                          onClick={() => setSelectedInvoice(inv)}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer group"
-                      >
-                        <td className="p-6">
-                          <div className="font-bold flex items-center gap-2 group-hover:text-[var(--theme-color,#4f46e5)] transition-colors">
-                             {inv.id}
-                             <div className="p-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg"><Download className="w-3 h-3 text-emerald-600" /></div>
-                          </div>
-                          <div className="text-xs text-zinc-400 font-bold mt-1 uppercase tracking-tighter">Billed to {inv.booking?.guest_name}</div>
-                        </td>
-                        <td className="p-6 text-right">
-                           <div className="font-black tracking-tight">₹{parseFloat(inv.total_amount).toLocaleString()}</div>
-                           <div className="text-[10px] text-zinc-400 font-black tracking-widest mt-0.5 uppercase hover:underline">View Proof</div>
+                    {isInvoicesLoading ? (
+                      <tr><td colSpan={2} className="p-8 text-center animate-pulse">Syncing history...</td></tr>
+                    ) : (
+                      filteredAndSortedFinalizedInvoices.map((inv: any) => (
+                        <tr key={inv.id} 
+                            onClick={() => setSelectedInvoice(inv)}
+                            className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer group"
+                        >
+                          <td className="p-6">
+                            <div className="font-bold flex items-center gap-2 group-hover:text-[var(--theme-color,#4f46e5)] transition-colors">
+                               {inv.id}
+                               <div className="p-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg"><Download className="w-3 h-3 text-emerald-600" /></div>
+                            </div>
+                            <div className="text-xs text-zinc-400 font-bold mt-1 uppercase tracking-tighter">Billed to {inv.booking?.guest_name}</div>
+                          </td>
+                          <td className="p-6 text-right">
+                             <div className="font-black tracking-tight">₹{parseFloat(inv.total_amount).toLocaleString()}</div>
+                             <div className="text-[10px] text-zinc-400 font-black tracking-widest mt-0.5 uppercase hover:underline">View Proof</div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                    {filteredAndSortedFinalizedInvoices.length === 0 && !isInvoicesLoading && (
+                      <tr>
+                        <td colSpan={2} className="p-12 text-center text-zinc-400 font-medium italic">
+                          {finalizedSearchTerm ? `No finalized invoices matching "${finalizedSearchTerm}".` : 'Archive is currently empty.'}
                         </td>
                       </tr>
-                    ))}
-                    {invoices.length === 0 && !isInvoicesLoading && (
-                      <tr><td colSpan={2} className="p-12 text-center text-zinc-400 font-medium italic">Archive is currently empty.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1117,15 +1412,575 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Expense Management View */}
       {activeTab === 'expenses' && (
-        <div className="bg-white dark:bg-zinc-900 p-20 rounded-[60px] border border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center text-center space-y-4 animate-in fade-in zoom-in-95 duration-500">
-           <div className="w-20 h-20 bg-zinc-50 dark:bg-zinc-950 rounded-full flex items-center justify-center border-2 border-zinc-100 dark:border-zinc-800">
-              <Plus className="w-8 h-8 text-zinc-300" />
-           </div>
-           <div>
-              <h2 className="text-2xl font-black tracking-tighter italic uppercase text-zinc-400">Expense Management</h2>
-              <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">Track business costs, utility bills, and purchase orders.</p>
-           </div>
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500 opacity-[0.04] rounded-bl-full transition-transform group-hover:scale-110"></div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Expenses (This Month)</span>
+                <div className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-xl"><TrendingDown className="w-4 h-4" /></div>
+              </div>
+              <div className="text-3xl font-black tracking-tighter text-rose-600 dark:text-rose-400">
+                ₹{(expenseSummary?.total_expenses_month || 0).toLocaleString()}
+              </div>
+              <div className="mt-3 text-[10px] text-zinc-400 font-bold uppercase tracking-tight">Month-to-Date Operational & Outflow</div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500 opacity-[0.04] rounded-bl-full transition-transform group-hover:scale-110"></div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Booking Refunds Issued</span>
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-xl"><RotateCcw className="w-4 h-4" /></div>
+              </div>
+              <div className="text-3xl font-black tracking-tighter text-amber-600 dark:text-amber-400">
+                ₹{(expenseSummary?.total_booking_refunds || 0).toLocaleString()}
+              </div>
+              <div className="mt-3 text-[10px] text-zinc-400 font-bold uppercase tracking-tight">Cancellations & Early Check-outs</div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500 opacity-[0.04] rounded-bl-full transition-transform group-hover:scale-110"></div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Order/Service Refunds</span>
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 rounded-xl"><Utensils className="w-4 h-4" /></div>
+              </div>
+              <div className="text-3xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
+                ₹{(expenseSummary?.total_order_refunds || 0).toLocaleString()}
+              </div>
+              <div className="mt-3 text-[10px] text-zinc-400 font-bold uppercase tracking-tight">F&B & Ancillary Deductions</div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500 opacity-[0.04] rounded-bl-full transition-transform group-hover:scale-110"></div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Cash Outflow Today</span>
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 rounded-xl"><DollarSign className="w-4 h-4" /></div>
+              </div>
+              <div className="text-3xl font-black tracking-tighter text-emerald-600 dark:text-emerald-400">
+                ₹{(expenseSummary?.cash_outflow_today || 0).toLocaleString()}
+              </div>
+              <div className="mt-3 text-[10px] text-zinc-400 font-bold uppercase tracking-tight">Physical Drawer Balancing Outflow</div>
+            </div>
+          </div>
+
+          {/* Action Header & Filters Bar */}
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+                  Expense Register
+                  <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-3 py-1 rounded-full text-xs font-black">
+                    {filteredExpenses.length} Records
+                  </span>
+                </h2>
+                <p className="text-zinc-400 font-bold text-xs uppercase tracking-wider mt-1">Audit Trail & Outflow Logs</p>
+              </div>
+
+              <button
+                onClick={handleOpenAddExpense}
+                className="px-5 py-3 bg-[var(--theme-color,#4f46e5)] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Log New Expense
+              </button>
+            </div>
+
+            {/* Filter controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="relative lg:col-span-2">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search description, ID, vendor, receipt..."
+                  value={expenseSearch}
+                  onChange={(e) => setExpenseSearch(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-9 pr-8 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 shadow-sm"
+                />
+                {expenseSearch && (
+                  <button onClick={() => setExpenseSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <select
+                  value={expenseTypeFilter}
+                  onChange={(e) => setExpenseTypeFilter(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
+                >
+                  <option value="All">All Types</option>
+                  <option value="Operational">Operational</option>
+                  <option value="Booking Refund">Booking Refund</option>
+                  <option value="Order Refund">Order Refund</option>
+                  <option value="Vendor Bill">Vendor Bill</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={expenseDepartmentFilter}
+                  onChange={(e) => setExpenseDepartmentFilter(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
+                >
+                  <option value="All">All Departments</option>
+                  <option value="Front Desk">Front Desk</option>
+                  <option value="Kitchen">Kitchen</option>
+                  <option value="Housekeeping">Housekeeping</option>
+                  <option value="Maintenance">Maintenance</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={expensePaymentModeFilter}
+                  onChange={(e) => setExpensePaymentModeFilter(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
+                >
+                  <option value="All">All Payment Modes</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Wallet">Wallet</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Expense Table */}
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b">
+                  <tr>
+                    <th className="p-5">Reference & Date</th>
+                    <th className="p-5">Classification</th>
+                    <th className="p-5">Description & Links</th>
+                    <th className="p-5">Payment & Status</th>
+                    <th className="p-5 text-right">Amount</th>
+                    <th className="p-5 text-center">Receipt</th>
+                    <th className="p-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {isExpensesLoading ? (
+                    <tr><td colSpan={7} className="p-8 text-center animate-pulse">Loading expenses...</td></tr>
+                  ) : filteredExpenses.map((exp: any) => (
+                    <tr key={exp.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="p-5">
+                        <div className="font-extrabold text-xs text-zinc-900 dark:text-white flex items-center gap-2">
+                          {exp.id}
+                        </div>
+                        <div className="text-[10px] font-bold text-zinc-400 mt-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-zinc-400" />
+                          {exp.expense_date ? new Date(exp.expense_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
+                            exp.expense_type === 'Booking Refund' ? "bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400" :
+                            exp.expense_type === 'Order Refund' ? "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400" :
+                            exp.expense_type === 'Vendor Bill' ? "bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400" :
+                            "bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
+                          )}>
+                            {exp.expense_type}
+                          </span>
+                          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+                            {exp.category} • {exp.department || 'General'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="font-bold text-xs text-zinc-800 dark:text-zinc-200">{exp.description}</div>
+                        <div className="text-[10px] text-zinc-400 font-medium mt-0.5 space-x-2">
+                          {exp.supplier_name && <span>Vendor: <b>{exp.supplier_name}</b></span>}
+                          {exp.booking_id && <span className="text-amber-600">Booking ID: <b>{exp.booking_id}</b></span>}
+                          {exp.external_booking_ref && <span className="text-amber-600">OTA Ref: <b>{exp.external_booking_ref}</b></span>}
+                          {exp.invoice_id && <span className="text-indigo-600">Invoice ID: <b>{exp.invoice_id}</b></span>}
+                          {exp.receipt_no && <span>Receipt #: <b>{exp.receipt_no}</b></span>}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{exp.payment_mode}</div>
+                        <span className={cn(
+                          "inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md mt-1",
+                          exp.expense_status === 'PAID' ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" :
+                          exp.expense_status === 'PENDING' ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" :
+                          "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                        )}>
+                          {exp.expense_status}
+                        </span>
+                      </td>
+
+                      <td className="p-5 text-right">
+                        <div className="font-black text-base tracking-tight text-zinc-900 dark:text-white">
+                          ₹{parseFloat(exp.amount).toLocaleString()}
+                        </div>
+                      </td>
+
+                      <td className="p-5 text-center">
+                        {exp.receipt_image_url ? (
+                          <a
+                            href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${exp.receipt_image_url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1.5 rounded-xl hover:bg-indigo-100 transition-all"
+                          >
+                            <Paperclip className="w-3.5 h-3.5" /> Receipt
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-zinc-400 italic">No file</span>
+                        )}
+                      </td>
+
+                      <td className="p-5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEditExpense(exp)}
+                            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-xl transition-all"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete expense ${exp.id}?`)) {
+                                deleteExpenseMutation.mutate(exp.id);
+                              }
+                            }}
+                            className="p-2 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 rounded-xl transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredExpenses.length === 0 && !isExpensesLoading && (
+                    <tr>
+                      <td colSpan={7} className="p-12 text-center text-zinc-400 font-medium italic">
+                        No expenses match the selected filters or search terms.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Entry Slide-Over / Modal */}
+      {isExpenseModalOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsExpenseModalOpen(false)} />
+          <div className="relative w-full max-w-xl bg-white dark:bg-zinc-950 h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col overflow-y-auto">
+            {/* Header */}
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
+                  {editingExpense ? `Edit Expense (${editingExpense.id})` : 'Log Property Outflow / Expense'}
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">
+                  Operating Bills, Vendor Outflows & Guest Refunds
+                </p>
+              </div>
+              <button onClick={() => setIsExpenseModalOpen(false)} className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-8 space-y-6 flex-1 overflow-y-auto">
+              {/* Expense Type Selector */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Outflow / Expense Type *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'Operational', label: 'Operational' },
+                    { id: 'Booking Refund', label: 'Booking Refund' },
+                    { id: 'Order Refund', label: 'Order Refund' },
+                    { id: 'Vendor Bill', label: 'Vendor Bill' }
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setExpenseForm({
+                        ...expenseForm,
+                        expense_type: t.id,
+                        department: t.id === 'Booking Refund' ? 'Front Desk' : t.id === 'Order Refund' ? 'Kitchen' : expenseForm.department,
+                        category: (t.id === 'Booking Refund' || t.id === 'Order Refund') ? 'Guest Refund' : expenseForm.category
+                      })}
+                      className={cn(
+                        "py-3 px-2 rounded-2xl text-[10px] font-black uppercase tracking-wider border-2 transition-all text-center",
+                        expenseForm.expense_type === t.id
+                          ? "border-[var(--theme-color,#4f46e5)] bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-sm scale-105"
+                          : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-zinc-300"
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Conditional Fields based on Expense Type */}
+              {expenseForm.expense_type === 'Booking Refund' && (
+                <div className="p-5 bg-amber-50/60 dark:bg-amber-950/20 border-2 border-amber-200 dark:border-amber-900/40 rounded-3xl space-y-4">
+                  <div className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4" /> Guest Booking Refund Context
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Select Booking</label>
+                      <select
+                        value={expenseForm.booking_id}
+                        onChange={(e) => {
+                          const bId = e.target.value;
+                          const selectedB = bookings.find((b: any) => b.id === bId);
+                          setExpenseForm({
+                            ...expenseForm,
+                            booking_id: bId,
+                            description: selectedB ? `Booking Refund for ${selectedB.guest_name} (${bId})` : expenseForm.description
+                          });
+                        }}
+                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                      >
+                        <option value="">-- Select Active / Checked-Out Booking --</option>
+                        {bookings.map((b: any) => (
+                          <option key={b.id} value={b.id}>{b.guest_name} ({b.id}) - ₹{b.total_price}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">External OTA Ref (PNR / MMT)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. MMT-10924823"
+                        value={expenseForm.external_booking_ref}
+                        onChange={(e) => setExpenseForm({ ...expenseForm, external_booking_ref: e.target.value })}
+                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {expenseForm.expense_type === 'Order Refund' && (
+                <div className="p-5 bg-indigo-50/60 dark:bg-indigo-950/20 border-2 border-indigo-200 dark:border-indigo-900/40 rounded-3xl space-y-4">
+                  <div className="text-xs font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                    <Utensils className="w-4 h-4" /> Order / Service Refund Context
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Select Invoice / Order Reference</label>
+                    <select
+                      value={expenseForm.invoice_id}
+                      onChange={(e) => {
+                        const invId = e.target.value;
+                        const selectedInv = invoices.find((inv: any) => inv.id === invId);
+                        setExpenseForm({
+                          ...expenseForm,
+                          invoice_id: invId,
+                          description: selectedInv ? `Order Refund for ${selectedInv.booking?.guest_name || 'Customer'} (${invId})` : expenseForm.description
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                    >
+                      <option value="">-- Select Invoice Reference --</option>
+                      {invoices.map((inv: any) => (
+                        <option key={inv.id} value={inv.id}>{inv.id} - Billed to {inv.booking?.guest_name || 'Walk-in'} (₹{inv.total_amount})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {(expenseForm.expense_type === 'Operational' || expenseForm.expense_type === 'Vendor Bill') && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Supplier / Vendor Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. State Electricity Board / Metro Traders"
+                      value={expenseForm.supplier_name}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, supplier_name: e.target.value })}
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Department</label>
+                    <select
+                      value={expenseForm.department}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, department: e.target.value })}
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none cursor-pointer"
+                    >
+                      <option value="Front Desk">Front Desk</option>
+                      <option value="Kitchen">Kitchen / F&B</option>
+                      <option value="Housekeeping">Housekeeping</option>
+                      <option value="Maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Category & Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Category *</label>
+                  <select
+                    value={expenseForm.category}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="Utilities">Utilities (Electricity, Water, Wi-Fi, Gas)</option>
+                    <option value="Housekeeping & Linens">Housekeeping & Linens</option>
+                    <option value="Maintenance & Repairs">Maintenance & Repairs</option>
+                    <option value="Grocery & Kitchen Supplies">Grocery & Kitchen Supplies</option>
+                    <option value="OTA Commission & Fees">OTA Commission & Fees</option>
+                    <option value="Staff Salaries & Petty Cash">Staff Salaries & Petty Cash</option>
+                    <option value="Guest Refund">Guest Refund</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Expense Date</label>
+                  <input
+                    type="date"
+                    value={expenseForm.expense_date}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Description / Reason *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Monthly Electricity Bill for June or Refund for early checkout"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none"
+                />
+              </div>
+
+              {/* Financial Amount & Payment Mode */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 bg-zinc-50 dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Amount (₹) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={expenseForm.amount}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-sm font-black text-rose-600 dark:text-rose-400 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Payment Mode</label>
+                  <select
+                    value={expenseForm.payment_mode}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, payment_mode: e.target.value })}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Wallet">Wallet</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Status</label>
+                  <select
+                    value={expenseForm.expense_status}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, expense_status: e.target.value })}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="PAID">PAID</option>
+                    <option value="PENDING">PENDING</option>
+                    <option value="DRAFT">DRAFT</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Receipt File Upload */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Attach Receipt / Voucher Image or PDF</label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleReceiptUpload}
+                    disabled={isUploadingReceipt}
+                    className="hidden"
+                    id="receipt-file-input"
+                  />
+                  <label
+                    htmlFor="receipt-file-input"
+                    className="px-4 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 cursor-pointer flex items-center gap-2"
+                  >
+                    <Paperclip className="w-4 h-4" /> {isUploadingReceipt ? 'Uploading...' : 'Choose File'}
+                  </label>
+
+                  {previewReceiptUrl && (
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${previewReceiptUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-black text-indigo-600 underline flex items-center gap-1"
+                    >
+                      View Uploaded Receipt <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Internal Audit Notes</label>
+                <textarea
+                  placeholder="Optional internal remarks or approval notes..."
+                  value={expenseForm.notes}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, notes: e.target.value })}
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 font-bold text-xs outline-none min-h-[70px]"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsExpenseModalOpen(false)}
+                  className="flex-1 py-4 border border-zinc-200 dark:border-zinc-800 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveExpense}
+                  disabled={createExpenseMutation.isPending || updateExpenseMutation.isPending}
+                  className="flex-1 py-4 bg-[var(--theme-color,#4f46e5)] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {editingExpense ? 'Update Expense' : 'Save & Record Expense'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
