@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '@/lib/api';
 import { useParams } from 'next/navigation';
-import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone } from 'lucide-react';
+import { FileText, Download, CheckCircle2, Edit3, X, Plus, Trash2, Building2, UserCircle, Layout, Search, Mail, Phone, ArrowUpDown, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function BillingPage() {
@@ -41,6 +41,51 @@ export default function BillingPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [reviewingBooking, setReviewingBooking] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'invoices' | 'create-invoice' | 'expenses' | 'payments'>('invoices');
+  
+  // Awaiting Checkout Search & Sort State
+  const [awaitingSearchTerm, setAwaitingSearchTerm] = useState('');
+  const [awaitingSortBy, setAwaitingSortBy] = useState<'newest' | 'oldest' | 'amount-desc' | 'amount-asc' | 'name-asc' | 'name-desc'>('newest');
+
+  const filteredAndSortedAwaitingBookings = checkedOutBookings
+    .filter((b: any) => {
+      const term = awaitingSearchTerm.toLowerCase().trim();
+      if (!term) return true;
+      const guestName = (b.guest_name || '').toLowerCase();
+      const bookingId = (b.id || '').toLowerCase();
+      const roomName = (b.room?.name || '').toLowerCase();
+      const amountStr = (b.total_price || '').toString();
+      return (
+        guestName.includes(term) ||
+        bookingId.includes(term) ||
+        roomName.includes(term) ||
+        amountStr.includes(term)
+      );
+    })
+    .sort((a: any, b: any) => {
+      if (awaitingSortBy === 'newest') {
+        const dateA = a.check_out ? new Date(a.check_out).getTime() : 0;
+        const dateB = b.check_out ? new Date(b.check_out).getTime() : 0;
+        return dateB - dateA;
+      }
+      if (awaitingSortBy === 'oldest') {
+        const dateA = a.check_out ? new Date(a.check_out).getTime() : 0;
+        const dateB = b.check_out ? new Date(b.check_out).getTime() : 0;
+        return dateA - dateB;
+      }
+      if (awaitingSortBy === 'amount-desc') {
+        return (parseFloat(b.total_price) || 0) - (parseFloat(a.total_price) || 0);
+      }
+      if (awaitingSortBy === 'amount-asc') {
+        return (parseFloat(a.total_price) || 0) - (parseFloat(b.total_price) || 0);
+      }
+      if (awaitingSortBy === 'name-asc') {
+        return (a.guest_name || '').localeCompare(b.guest_name || '');
+      }
+      if (awaitingSortBy === 'name-desc') {
+        return (b.guest_name || '').localeCompare(a.guest_name || '');
+      }
+      return 0;
+    });
   
   // Create Invoice State
   const [invoiceTo, setInvoiceTo] = useState<'Leads' | 'Business' | 'Customer'>('Customer');
@@ -107,8 +152,20 @@ export default function BillingPage() {
   ).slice(0, 5);
 
 
-  const totalRevenue = invoices.reduce((acc: number, inv: any) => acc + parseFloat(inv.total_amount || 0), 0);
-  const totalGST = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.total_amount || 0) * 0.18 / 1.18), 0);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const currentMonthInvoices = invoices.filter((inv: any) => {
+    const dateStr = inv.created_at || inv.due_date;
+    if (!dateStr) return false;
+    const invDate = new Date(dateStr);
+    if (isNaN(invDate.getTime())) return false;
+    return invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth;
+  });
+
+  const totalRevenue = currentMonthInvoices.reduce((acc: number, inv: any) => acc + parseFloat(inv.total_amount || 0), 0);
+  const totalGST = currentMonthInvoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.total_amount || 0) * 0.18 / 1.18), 0);
 
   // Review System State (Restored)
   const [editItems, setEditItems] = useState<{type: string, description: string, amount: string}[]>([]);
@@ -260,14 +317,14 @@ export default function BillingPage() {
                 <div className="text-4xl font-black mt-2 tracking-tighter">₹{totalRevenue.toLocaleString()}</div>
                 <div className="mt-4 flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-tight">
                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                   Live Transaction Data
+                   Current Month Revenue
                 </div>
              </div>
              <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500 opacity-[0.03] rounded-bl-full transition-transform group-hover:scale-110"></div>
-                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">GST Tax Collected</span>
+                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">GST Tax Collected (This Month)</span>
                 <div className="text-4xl font-black mt-2 tracking-tighter text-indigo-600">₹{totalGST.toLocaleString()}</div>
-                <div className="mt-4 text-zinc-400 font-bold text-xs uppercase tracking-tight">Output Tax Liability</div>
+                <div className="mt-4 text-zinc-400 font-bold text-xs uppercase tracking-tight">Current Month Tax Liability</div>
              </div>
              <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500 opacity-[0.03] rounded-bl-full transition-transform group-hover:scale-110"></div>
@@ -280,9 +337,53 @@ export default function BillingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Pending Section */}
             <div className="space-y-6">
-              <h2 className="text-xl font-black tracking-tight flex items-center gap-2 uppercase text-zinc-400 text-xs">
-                Awaiting Checkout Invoices
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h2 className="text-xl font-black tracking-tight flex items-center gap-2 uppercase text-zinc-400 text-xs">
+                  Awaiting Checkout Invoices
+                  <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2.5 py-0.5 rounded-full text-[10px] font-black">
+                    {filteredAndSortedAwaitingBookings.length}
+                  </span>
+                </h2>
+              </div>
+
+              {/* Search & Sort Controls */}
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Search guest, ID, or amount..."
+                    value={awaitingSearchTerm}
+                    onChange={(e) => setAwaitingSearchTerm(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-9 pr-8 py-2.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 shadow-sm transition-all placeholder-zinc-400"
+                  />
+                  {awaitingSearchTerm && (
+                    <button
+                      onClick={() => setAwaitingSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                  <ArrowUpDown className="w-4 h-4 text-zinc-400 shrink-0 hidden sm:block" />
+                  <select
+                    value={awaitingSortBy}
+                    onChange={(e: any) => setAwaitingSortBy(e.target.value)}
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-extrabold text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-[var(--theme-color,#4f46e5)]/20 cursor-pointer w-full sm:w-auto shadow-sm"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="amount-desc">Amount: High to Low</option>
+                    <option value="amount-asc">Amount: Low to High</option>
+                    <option value="name-asc">Guest: A to Z</option>
+                    <option value="name-desc">Guest: Z to A</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b">
@@ -292,14 +393,24 @@ export default function BillingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {isBookingsLoading ? <tr><td colSpan={2} className="p-8 text-center animate-pulse">Scanning ledger...</td></tr> : checkedOutBookings.map((b: any) => (
+                    {isBookingsLoading ? (
+                      <tr><td colSpan={2} className="p-8 text-center animate-pulse">Scanning ledger...</td></tr>
+                    ) : filteredAndSortedAwaitingBookings.map((b: any) => (
                       <tr key={b.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                         <td className="p-6">
                           <div className="font-bold flex items-center gap-2">
                              {b.guest_name}
                              <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 rounded-full uppercase tracking-tighter">{b.id}</span>
                           </div>
-                          <div className="text-xs font-bold text-[var(--theme-color,#4f46e5)] mt-1 tracking-tight">₹{parseFloat(b.total_price).toLocaleString()} • Space Allocated</div>
+                          <div className="text-xs font-bold text-[var(--theme-color,#4f46e5)] mt-1 tracking-tight flex items-center gap-2 flex-wrap">
+                             <span>₹{parseFloat(b.total_price).toLocaleString()} • Space Allocated</span>
+                             {b.check_out && (
+                               <span className="inline-flex items-center gap-1 text-zinc-500 dark:text-zinc-400 font-semibold bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 rounded-md text-[11px]">
+                                 <Calendar className="w-3 h-3 text-zinc-400" />
+                                 Checked out: {new Date(b.check_out).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                               </span>
+                             )}
+                          </div>
                         </td>
                         <td className="p-6 text-right">
                           <button 
@@ -312,8 +423,12 @@ export default function BillingPage() {
                         </td>
                       </tr>
                     ))}
-                    {checkedOutBookings.length === 0 && !isBookingsLoading && (
-                      <tr><td colSpan={2} className="p-12 text-center text-zinc-400 font-medium italic">No pending items found in register.</td></tr>
+                    {filteredAndSortedAwaitingBookings.length === 0 && !isBookingsLoading && (
+                      <tr>
+                        <td colSpan={2} className="p-12 text-center text-zinc-400 font-medium italic">
+                          {awaitingSearchTerm ? `No pending invoices matching "${awaitingSearchTerm}".` : 'No pending items found in register.'}
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
