@@ -1202,7 +1202,12 @@ async def create_expense(
     dt = datetime.utcnow()
     if data.expense_date:
         try:
-            dt = datetime.fromisoformat(data.expense_date.replace('Z', '+00:00'))
+            parsed_dt = datetime.fromisoformat(data.expense_date.replace('Z', '+00:00'))
+            if parsed_dt.date() > datetime.utcnow().date():
+                raise HTTPException(status_code=400, detail="Future dates are not allowed for expenses.")
+            dt = parsed_dt
+        except HTTPException:
+            raise
         except Exception:
             dt = datetime.utcnow()
 
@@ -1275,7 +1280,12 @@ async def update_expense(
     update_data = data.dict(exclude_unset=True)
     if "expense_date" in update_data and update_data["expense_date"]:
         try:
-            update_data["expense_date"] = datetime.fromisoformat(update_data["expense_date"].replace('Z', '+00:00'))
+            parsed_dt = datetime.fromisoformat(update_data["expense_date"].replace('Z', '+00:00'))
+            if parsed_dt.date() > datetime.utcnow().date():
+                raise HTTPException(status_code=400, detail="Future dates are not allowed for expenses.")
+            update_data["expense_date"] = parsed_dt
+        except HTTPException:
+            raise
         except Exception:
             del update_data["expense_date"]
             
