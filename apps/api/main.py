@@ -3,7 +3,7 @@ import os
 import uuid
 import jwt
 import json
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, Any
 from pydantic import BaseModel, ConfigDict
 from fastapi import FastAPI, Depends, Request, HTTPException, File, UploadFile, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1080,8 +1080,9 @@ async def create_admin_user(tenant_id: str, data: AdminUserCreate, context: dict
 # --- EXPENSE MANAGEMENT ENDPOINTS ---
 
 @app.post("/api/upload-receipt")
+@app.post("/api/expenses/upload-receipt")
 @app.post("/api/{tenant_id}/expenses/upload-receipt")
-async def upload_expense_receipt(file: UploadFile = File(...), context: dict = Depends(get_user_context)):
+async def upload_expense_receipt(file: UploadFile = File(...), tenant_id: Optional[str] = None, context: dict = Depends(get_user_context)):
     """Uploads an expense receipt image or PDF and returns relative URL."""
     receipts_dir = os.path.join("uploads", "receipts")
     os.makedirs(receipts_dir, exist_ok=True)
@@ -1094,15 +1095,17 @@ async def upload_expense_receipt(file: UploadFile = File(...), context: dict = D
         
     return {"url": f"/uploads/receipts/{filename}"}
 
+@app.get("/api/expenses/summary")
 @app.get("/api/{tenant_id}/expenses/summary")
-async def get_expenses_summary(tenant_id: str, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
-    set_rls_context(db, tenant_id)
+async def get_expenses_summary(tenant_id: Optional[str] = None, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+    active_tenant = tenant_id or context["tenant_id"]
+    set_rls_context(db, active_tenant)
     now = datetime.utcnow()
     current_year = now.year
     current_month = now.month
     today_start = datetime(now.year, now.month, now.day)
     
-    all_expenses = db.query(Expense).filter(Expense.tenant_id == tenant_id).all()
+    all_expenses = db.query(Expense).filter(Expense.tenant_id == active_tenant).all()
     
     month_expenses = [
         e for e in all_expenses 
@@ -1124,9 +1127,10 @@ async def get_expenses_summary(tenant_id: str, context: dict = Depends(get_user_
         "cash_outflow_today": cash_outflow_today
     }
 
+@app.get("/api/expenses")
 @app.get("/api/{tenant_id}/expenses")
 async def get_expenses(
-    tenant_id: str,
+    tenant_id: Optional[str] = None,
     category: Optional[str] = None,
     department: Optional[str] = None,
     expense_type: Optional[str] = None,
@@ -1135,8 +1139,9 @@ async def get_expenses(
     context: dict = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
-    set_rls_context(db, tenant_id)
-    query = db.query(Expense).filter(Expense.tenant_id == tenant_id)
+    active_tenant = tenant_id or context["tenant_id"]
+    set_rls_context(db, active_tenant)
+    query = db.query(Expense).filter(Expense.tenant_id == active_tenant)
     
     if expense_type and expense_type != 'All':
         query = query.filter(Expense.expense_type == expense_type)
@@ -1188,15 +1193,23 @@ async def get_expenses(
         
     return result
 
+def _clean_str(val: Optional[str]) -> Optional[str]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+@app.post("/api/expenses")
 @app.post("/api/{tenant_id}/expenses")
 async def create_expense(
-    tenant_id: str,
     data: ExpenseCreate,
+    tenant_id: Optional[str] = None,
     context: dict = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
-    set_rls_context(db, tenant_id)
-    count = db.query(Expense).filter(Expense.tenant_id == tenant_id).count()
+    active_tenant = tenant_id or context["tenant_id"]
+    set_rls_context(db, active_tenant)
+    count = db.query(Expense).filter(Expense.tenant_id == active_tenant).count()
     expense_id = f"EXP-{101 + count}"
     
     dt = datetime.utcnow()
@@ -1217,21 +1230,21 @@ async def create_expense(
 
     expense = Expense(
         id=expense_id,
-        tenant_id=tenant_id,
+        tenant_id=active_tenant,
         expense_type=data.expense_type,
         category=data.category,
         department=dept,
         amount=data.amount,
         payment_mode=data.payment_mode,
         expense_status=data.expense_status or "PAID",
-        booking_id=data.booking_id,
-        external_booking_ref=data.external_booking_ref,
-        invoice_id=data.invoice_id,
-        supplier_name=data.supplier_name,
-        receipt_no=data.receipt_no,
-        receipt_image_url=data.receipt_image_url,
+        booking_id=_clean_str(data.booking_id),
+        external_booking_ref=_clean_str(data.external_booking_ref),
+        invoice_id=_clean_str(data.invoice_id),
+        supplier_name=_clean_str(data.supplier_name),
+        receipt_no=_clean_str(data.receipt_no),
+        receipt_image_url=_clean_str(data.receipt_image_url),
         description=data.description,
-        notes=data.notes,
+        notes=_clean_str(data.notes),
         expense_date=dt,
         created_at=datetime.utcnow()
     )
@@ -1259,16 +1272,18 @@ async def create_expense(
         "created_at": expense.created_at.isoformat() if expense.created_at else None
     }
 
+@app.put("/api/expenses/{expense_id}")
 @app.put("/api/{tenant_id}/expenses/{expense_id}")
 async def update_expense(
-    tenant_id: str,
     expense_id: str,
     data: ExpenseUpdate,
+    tenant_id: Optional[str] = None,
     context: dict = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
-    set_rls_context(db, tenant_id)
-    expense = db.query(Expense).filter(Expense.tenant_id == tenant_id, Expense.id == expense_id).first()
+    active_tenant = tenant_id or context["tenant_id"]
+    set_rls_context(db, active_tenant)
+    expense = db.query(Expense).filter(Expense.tenant_id == active_tenant, Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
         
@@ -1280,6 +1295,8 @@ async def update_expense(
             del update_data["expense_date"]
             
     for key, value in update_data.items():
+        if isinstance(value, str) and key in ["booking_id", "external_booking_ref", "invoice_id", "supplier_name", "receipt_no", "receipt_image_url", "notes"]:
+            value = _clean_str(value)
         setattr(expense, key, value)
         
     db.commit()
@@ -1305,19 +1322,22 @@ async def update_expense(
         "created_at": expense.created_at.isoformat() if expense.created_at else None
     }
 
+@app.delete("/api/expenses/{expense_id}")
 @app.delete("/api/{tenant_id}/expenses/{expense_id}")
 async def delete_expense(
-    tenant_id: str,
     expense_id: str,
+    tenant_id: Optional[str] = None,
     context: dict = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
-    set_rls_context(db, tenant_id)
-    expense = db.query(Expense).filter(Expense.tenant_id == tenant_id, Expense.id == expense_id).first()
+    active_tenant = tenant_id or context["tenant_id"]
+    set_rls_context(db, active_tenant)
+    expense = db.query(Expense).filter(Expense.tenant_id == active_tenant, Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
         
     db.delete(expense)
     db.commit()
     return {"success": True, "message": "Expense deleted successfully"}
+
 

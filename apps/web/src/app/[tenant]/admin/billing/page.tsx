@@ -210,7 +210,14 @@ export default function BillingPage() {
       amount: numAmt,
       department: expenseForm.expense_type === 'Booking Refund' ? 'Front Desk' :
                   expenseForm.expense_type === 'Order Refund' ? 'Kitchen' :
-                  expenseForm.department
+                  expenseForm.department,
+      booking_id: expenseForm.booking_id?.trim() || null,
+      external_booking_ref: expenseForm.external_booking_ref?.trim() || null,
+      invoice_id: expenseForm.invoice_id?.trim() || null,
+      supplier_name: expenseForm.supplier_name?.trim() || null,
+      receipt_no: expenseForm.receipt_no?.trim() || null,
+      receipt_image_url: expenseForm.receipt_image_url?.trim() || null,
+      notes: expenseForm.notes?.trim() || null
     };
 
     if (editingExpense) {
