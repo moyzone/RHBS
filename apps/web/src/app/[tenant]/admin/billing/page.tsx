@@ -1678,11 +1678,11 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Expense Entry Slide-Over / Modal */}
+      {/* Expense Entry Pop-Up Modal */}
       {isExpenseModalOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsExpenseModalOpen(false)} />
-          <div className="relative w-full max-w-xl bg-white dark:bg-zinc-950 h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col overflow-y-auto">
+          <div className="relative w-full max-w-3xl lg:max-w-4xl max-h-[90vh] bg-white dark:bg-zinc-950 rounded-[36px] shadow-2xl border border-zinc-200 dark:border-zinc-800 animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
             {/* Header */}
             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex justify-between items-center">
               <div>
