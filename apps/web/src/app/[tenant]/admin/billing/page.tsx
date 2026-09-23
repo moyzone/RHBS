@@ -59,6 +59,7 @@ export default function BillingPage() {
   const [expenseDepartmentFilter, setExpenseDepartmentFilter] = useState('All');
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('All');
   const [expensePaymentModeFilter, setExpensePaymentModeFilter] = useState('All');
+  const [expenseSortBy, setExpenseSortBy] = useState<'newest' | 'oldest' | 'amount-desc' | 'amount-asc' | 'description-asc' | 'description-desc'>('newest');
 
   // Expense Modal State (Create / Edit)
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -226,27 +227,53 @@ export default function BillingPage() {
     }
   };
 
-  const filteredExpenses = expensesList.filter((e: any) => {
-    if (expenseTypeFilter !== 'All' && e.expense_type !== expenseTypeFilter) return false;
-    if (expenseDepartmentFilter !== 'All' && e.department !== expenseDepartmentFilter) return false;
-    if (expenseCategoryFilter !== 'All' && e.category !== expenseCategoryFilter) return false;
-    if (expensePaymentModeFilter !== 'All' && e.payment_mode !== expensePaymentModeFilter) return false;
-    
-    if (expenseSearch.trim()) {
-      const term = expenseSearch.toLowerCase().trim();
-      const matchId = (e.id || '').toLowerCase().includes(term);
-      const matchDesc = (e.description || '').toLowerCase().includes(term);
-      const matchSupplier = (e.supplier_name || '').toLowerCase().includes(term);
-      const matchReceipt = (e.receipt_no || '').toLowerCase().includes(term);
-      const matchBooking = (e.booking_id || '').toLowerCase().includes(term);
-      const matchExtBooking = (e.external_booking_ref || '').toLowerCase().includes(term);
-      const matchInvoice = (e.invoice_id || '').toLowerCase().includes(term);
-      if (!matchId && !matchDesc && !matchSupplier && !matchReceipt && !matchBooking && !matchExtBooking && !matchInvoice) {
-        return false;
+  const filteredAndSortedExpenses = expensesList
+    .filter((e: any) => {
+      if (expenseTypeFilter !== 'All' && e.expense_type !== expenseTypeFilter) return false;
+      if (expenseDepartmentFilter !== 'All' && e.department !== expenseDepartmentFilter) return false;
+      if (expenseCategoryFilter !== 'All' && e.category !== expenseCategoryFilter) return false;
+      if (expensePaymentModeFilter !== 'All' && e.payment_mode !== expensePaymentModeFilter) return false;
+      
+      if (expenseSearch.trim()) {
+        const term = expenseSearch.toLowerCase().trim();
+        const matchId = (e.id || '').toLowerCase().includes(term);
+        const matchDesc = (e.description || '').toLowerCase().includes(term);
+        const matchSupplier = (e.supplier_name || '').toLowerCase().includes(term);
+        const matchReceipt = (e.receipt_no || '').toLowerCase().includes(term);
+        const matchBooking = (e.booking_id || '').toLowerCase().includes(term);
+        const matchExtBooking = (e.external_booking_ref || '').toLowerCase().includes(term);
+        const matchInvoice = (e.invoice_id || '').toLowerCase().includes(term);
+        if (!matchId && !matchDesc && !matchSupplier && !matchReceipt && !matchBooking && !matchExtBooking && !matchInvoice) {
+          return false;
+        }
       }
-    }
-    return true;
-  });
+      return true;
+    })
+    .sort((a: any, b: any) => {
+      if (expenseSortBy === 'newest') {
+        const dateA = a.expense_date || a.created_at ? new Date(a.expense_date || a.created_at).getTime() : 0;
+        const dateB = b.expense_date || b.created_at ? new Date(b.expense_date || b.created_at).getTime() : 0;
+        return dateB - dateA;
+      }
+      if (expenseSortBy === 'oldest') {
+        const dateA = a.expense_date || a.created_at ? new Date(a.expense_date || a.created_at).getTime() : 0;
+        const dateB = b.expense_date || b.created_at ? new Date(b.expense_date || b.created_at).getTime() : 0;
+        return dateA - dateB;
+      }
+      if (expenseSortBy === 'amount-desc') {
+        return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
+      }
+      if (expenseSortBy === 'amount-asc') {
+        return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
+      }
+      if (expenseSortBy === 'description-asc') {
+        return (a.description || '').localeCompare(b.description || '');
+      }
+      if (expenseSortBy === 'description-desc') {
+        return (b.description || '').localeCompare(a.description || '');
+      }
+      return 0;
+    });
   
   // Awaiting Checkout Search & Sort State
   const [awaitingSearchTerm, setAwaitingSearchTerm] = useState('');
@@ -1479,7 +1506,7 @@ export default function BillingPage() {
                 <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
                   Expense Register
                   <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-3 py-1 rounded-full text-xs font-black">
-                    {filteredExpenses.length} Records
+                    {filteredAndSortedExpenses.length} Records
                   </span>
                 </h2>
                 <p className="text-zinc-400 font-bold text-xs uppercase tracking-wider mt-1">Audit Trail & Outflow Logs</p>
@@ -1494,7 +1521,7 @@ export default function BillingPage() {
             </div>
 
             {/* Filter controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
               <div className="relative lg:col-span-2">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
@@ -1553,6 +1580,22 @@ export default function BillingPage() {
                   <option value="Wallet">Wallet</option>
                 </select>
               </div>
+
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="w-4 h-4 text-zinc-400 shrink-0 hidden lg:block" />
+                <select
+                  value={expenseSortBy}
+                  onChange={(e: any) => setExpenseSortBy(e.target.value)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2.5 text-xs font-extrabold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer shadow-sm"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="amount-desc">Amount: High to Low</option>
+                  <option value="amount-asc">Amount: Low to High</option>
+                  <option value="description-asc">Description: A to Z</option>
+                  <option value="description-desc">Description: Z to A</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1574,7 +1617,7 @@ export default function BillingPage() {
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {isExpensesLoading ? (
                     <tr><td colSpan={7} className="p-8 text-center animate-pulse">Loading expenses...</td></tr>
-                  ) : filteredExpenses.map((exp: any) => (
+                  ) : filteredAndSortedExpenses.map((exp: any) => (
                     <tr key={exp.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="p-5">
                         <div className="font-extrabold text-xs text-zinc-900 dark:text-white flex items-center gap-2">
@@ -1670,7 +1713,7 @@ export default function BillingPage() {
                     </tr>
                   ))}
 
-                  {filteredExpenses.length === 0 && !isExpensesLoading && (
+                  {filteredAndSortedExpenses.length === 0 && !isExpensesLoading && (
                     <tr>
                       <td colSpan={7} className="p-12 text-center text-zinc-400 font-medium italic">
                         No expenses match the selected filters or search terms.
