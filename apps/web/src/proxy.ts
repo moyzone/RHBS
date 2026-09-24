@@ -45,6 +45,11 @@ export function proxy(req: NextRequest) {
       const targetPath = url.pathname.replace(/^\/admin/, "/hotelflora/admin");
       return NextResponse.redirect(new URL(targetPath, req.url));
     }
+    if (url.pathname === "/login" || url.pathname.startsWith("/login/")) {
+      const targetPath = url.pathname.replace(/^\/login/, "/hotelflora/login");
+      return NextResponse.redirect(new URL(targetPath, req.url));
+    }
+
     return NextResponse.next();
   }
 
