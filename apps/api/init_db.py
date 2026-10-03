@@ -86,8 +86,62 @@ def initialize_database():
                 print(f"Seed complete for {t_data['id']}.")
             else:
                 print(f"Tenant {t_data['id']} already exists.")
-        
+
+        # Seed initial users with bcrypt hashed passwords
+        import bcrypt
+        default_users = [
+            {
+                "id": "user_123",
+                "tenant_id": "hotelflora",
+                "email": "sarah@hotelflora.com",
+                "name": "Sarah Connor",
+                "role": "Front Desk",
+                "status": "Active",
+                "password_plain": "password123"
+            },
+            {
+                "id": "user_flora_admin",
+                "tenant_id": "hotelflora",
+                "email": "admin@hotelflora.com",
+                "name": "Flora Admin",
+                "role": "Manager",
+                "status": "Active",
+                "password_plain": "admin123"
+            },
+            {
+                "id": "user_demo_admin",
+                "tenant_id": "demo",
+                "email": "admin@demo.com",
+                "name": "Demo Admin",
+                "role": "Manager",
+                "status": "Active",
+                "password_plain": "demo123"
+            }
+        ]
+
+        for u_data in default_users:
+            existing_user = session.query(User).filter_by(tenant_id=u_data["tenant_id"], email=u_data["email"]).first()
+            if not existing_user:
+                print(f"Creating user {u_data['email']} for tenant {u_data['tenant_id']}...")
+                hashed = bcrypt.hashpw(u_data["password_plain"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                user = User(
+                    id=u_data["id"],
+                    tenant_id=u_data["tenant_id"],
+                    email=u_data["email"],
+                    name=u_data["name"],
+                    role=u_data["role"],
+                    status=u_data["status"],
+                    password=hashed
+                )
+                session.add(user)
+            else:
+                # Ensure password is set to bcrypt hash if not set
+                if not existing_user.password or not existing_user.password.startswith("$2"):
+                    existing_user.password = bcrypt.hashpw(u_data["password_plain"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                    session.add(existing_user)
+
         session.commit()
+
 
 if __name__ == "__main__":
     initialize_database()

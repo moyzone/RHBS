@@ -3,7 +3,7 @@ import os
 import uuid
 import jwt
 import json
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, ConfigDict
 from fastapi import FastAPI, Depends, Request, HTTPException, File, UploadFile, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -17,16 +17,18 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../packages'))
 from database.session import get_db, set_rls_context
 from database.schema import RoomType, Room, Booking, Invoice, Payment, Guest, Staff, Tenant, User, Expense
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func
 from init_db import initialize_database
 
-app = FastAPI(title="Restopia API")
-security = HTTPBearer()
+import bcrypt
 
-# Enable CORS for localhost Next.js app
+app = FastAPI(title="Restopia API")
+security = HTTPBearer(auto_error=False)
+
+# Enable CORS for localhost & tenant subdomain Next.js app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For dev only
+    allow_origin_regex=r"http://.*\.localhost:3000|http://localhost:3000|http://127\.0\.0\.1:3000|https://.*\.restopia\.in|https://restopia\.in",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,9 +43,20 @@ def on_startup():
     print("Running database initialization...")
     initialize_database()
 
-JWT_SECRET = "super_secret_jwt_key"
+JWT_SECRET = "super_secret_jwt_key_restopia_production_2026"
 
-def get_user_context(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
+
+def hash_password(plain_password: str) -> str:
+    return bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def get_user_context(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
     token = credentials.credentials
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
@@ -52,6 +65,19 @@ def get_user_context(credentials: HTTPAuthorizationCredentials = Depends(securit
         return payload
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+def require_roles(allowed_roles: List[str]):
+    def role_checker(context: dict = Depends(get_user_context)):
+        user_role = context.get("role")
+        if user_role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission denied for role: {user_role}"
+            )
+        return context
+    return role_checker
+
+
 
 
 # ---- Pydantic Schemas ----
@@ -178,6 +204,8 @@ class StaffCreate(BaseModel):
     phone: Optional[str] = None
     role: str = "Housekeeping"
     designation: Optional[str] = None
+    enable_login: Optional[bool] = False
+    password: Optional[str] = None
 
 class StaffUpdate(BaseModel):
     name: Optional[str] = None
@@ -186,6 +214,8 @@ class StaffUpdate(BaseModel):
     role: Optional[str] = None
     status: Optional[str] = None
     designation: Optional[str] = None
+    enable_login: Optional[bool] = None
+    password: Optional[str] = None
 
 class TenantUpdate(BaseModel):
     name: Optional[str] = None
@@ -266,8 +296,127 @@ class AdminUserUpdate(BaseModel):
     role: Optional[str] = None
     status: Optional[str] = None
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 # ---- REAL ENDPOINTS ----
+@app.get("/api/public/tenant/{tenant_id}")
+@app.get("/api/tenants/{tenant_id}")
+def get_public_tenant_metadata(tenant_id: str, db: Session = Depends(get_db)):
+    """
+    Public endpoint to fetch tenant brand metadata (name, theme color, logo) for login page.
+    """
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        return {
+            "id": tenant_id,
+            "name": tenant_id.capitalize(),
+            "theme_color": "#4f46e5",
+            "logo_url": None,
+            "business_type": "Hotel"
+        }
+    return {
+        "id": tenant.id,
+        "name": tenant.name,
+        "theme_color": tenant.theme_color or "#4f46e5",
+        "logo_url": tenant.logo_url,
+        "slogan": tenant.slogan,
+        "short_name": tenant.short_name,
+        "business_type": tenant.business_type
+    }
+
+
+@app.post("/api/{tenant_id}/auth/login")
+def login(tenant_id: str, body: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Tenant-Scoped Login API
+    Validates User.tenant_id == tenant_id AND User.email == email AND User.status == 'Active'.
+    Verifies bcrypt salted password hashes.
+    Returns signed HS256 JWT token.
+    """
+    clean_email = body.email.strip().lower() if body.email else ""
+    user = db.query(User).filter(
+        User.tenant_id == tenant_id,
+        func.lower(User.email) == clean_email,
+        User.status == "Active"
+    ).first()
+
+    if not user or not user.password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not verify_password(body.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    exp_timestamp = int(datetime.utcnow().timestamp()) + (86400 * 30) # 30 days expiration
+    payload = {
+        "user_id": user.id,
+        "tenant_id": user.tenant_id,
+        "role": user.role,
+        "name": user.name or "",
+        "email": user.email,
+        "exp": exp_timestamp
+    }
+
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    return {
+        "token": token,
+        "access_token": token,
+        "token_type": "bearer",
+        "user": payload
+    }
+
+@app.get("/api/auth/me")
+def get_current_session(context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+    """
+    Current Session Endpoint
+    Validates Authorization: Bearer <token> header and returns current user profile & tenant info.
+    """
+    user_id = context.get("user_id")
+    tenant_id = context.get("tenant_id")
+
+    user = db.query(User).filter(User.id == user_id, User.tenant_id == tenant_id).first()
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+    user_info = {
+        "user_id": user.id if user else context.get("user_id"),
+        "id": user.id if user else context.get("user_id"),
+        "tenant_id": tenant_id,
+        "role": user.role if user else context.get("role", "Manager"),
+        "name": user.name if user else context.get("name", ""),
+        "email": user.email if user else context.get("email", ""),
+        "status": user.status if user else "Active"
+    }
+
+    tenant_info = None
+    if tenant:
+        tenant_info = {
+            "id": tenant.id,
+            "name": tenant.name,
+            "theme_color": tenant.theme_color,
+            "business_type": tenant.business_type,
+            "business_sub_type": tenant.business_sub_type,
+            "slogan": tenant.slogan,
+            "short_name": tenant.short_name,
+            "currency": tenant.currency,
+            "phone": tenant.phone,
+            "email": tenant.email,
+            "logo_url": tenant.logo_url
+        }
+
+    return {
+        "user": user_info,
+        "tenant": tenant_info,
+        "user_id": user_info["user_id"],
+        "tenant_id": user_info["tenant_id"],
+        "role": user_info["role"],
+        "name": user_info["name"],
+        "email": user_info["email"]
+    }
+
 @app.post("/api/dev/token")
+
 def generate_mock_token(tenant_id: str = "hotelflora"):
     """
     Utility endpoint to fetch a valid JWT token during local non-DB dev.
@@ -426,7 +575,7 @@ def update_room(room_id: str, req: RoomUpdate, context: dict = Depends(get_user_
     return room
 
 @app.patch("/api/rooms/{room_id}/housekeeping")
-def update_room_housekeeping(room_id: str, req: StatusUpdate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def update_room_housekeeping(room_id: str, req: StatusUpdate, context: dict = Depends(require_roles(["Owner", "Manager", "Housekeeping", "Front Desk"])), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
@@ -464,7 +613,8 @@ def get_bookings(context: dict = Depends(get_user_context), db: Session = Depend
     return bookings
 
 @app.post("/api/bookings")
-def create_booking(req: BookingCreate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def create_booking(req: BookingCreate, context: dict = Depends(require_roles(["Owner", "Manager", "Front Desk"])), db: Session = Depends(get_db)):
+
     set_rls_context(db, context["tenant_id"])
     
     new_check_in = datetime.fromisoformat(req.check_in.replace("Z", "").split("+")[0])
@@ -987,49 +1137,211 @@ def get_guest_bookings(phone: str, context: dict = Depends(get_user_context), db
 @app.get("/api/staff")
 def get_staff(context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
-    return db.query(Staff).all()
+    staff_members = db.query(Staff).all()
+    users = db.query(User).filter(User.tenant_id == context["tenant_id"]).all()
+    
+    # Map active user emails to check portal login status
+    active_user_map = {
+        u.email.lower(): u.status
+        for u in users
+        if u.email
+    }
+    
+    result = []
+    for s in staff_members:
+        clean_email = s.email.strip().lower() if s.email else ""
+        login_active = bool(clean_email and active_user_map.get(clean_email) == "Active")
+        result.append({
+            "id": s.id,
+            "tenant_id": s.tenant_id,
+            "name": s.name,
+            "email": s.email,
+            "phone": s.phone,
+            "role": s.role,
+            "status": s.status,
+            "designation": s.designation,
+            "created_at": str(s.created_at) if s.created_at else None,
+            "enable_login": login_active
+        })
+    return result
 
 @app.post("/api/staff")
-def create_staff(req: StaffCreate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def create_staff(req: StaffCreate, context: dict = Depends(require_roles(["Owner", "Manager"])), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
+    
+    clean_email = req.email.strip().lower() if req.email and req.email.strip() else None
+
+    if req.enable_login:
+        if not clean_email:
+            raise HTTPException(status_code=400, detail="Work email address is required when enabling portal login access.")
+        if not req.password or len(req.password.strip()) < 6:
+            raise HTTPException(status_code=400, detail="Initial password must be at least 6 characters long.")
+        
+        # Check duplicate user in tenant
+        existing_user = db.query(User).filter(
+            User.tenant_id == context["tenant_id"],
+            func.lower(User.email) == clean_email
+        ).first()
+
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email address '{clean_email}' is already registered for another user in this tenant."
+            )
+
     new_staff = Staff(
         id=f"staff_{uuid.uuid4().hex[:8]}",
         tenant_id=context["tenant_id"],
         name=req.name,
-        email=req.email,
+        email=clean_email,
         phone=req.phone,
         role=req.role,
-        designation=req.designation
+        designation=req.designation,
+        status="Active"
     )
     db.add(new_staff)
+
+    if req.enable_login and clean_email and req.password:
+        new_user = User(
+            id=f"user_{uuid.uuid4().hex[:8]}",
+            tenant_id=context["tenant_id"],
+            email=clean_email,
+            name=req.name,
+            role=req.role,
+            status="Active",
+            password=hash_password(req.password)
+        )
+        db.add(new_user)
+
     db.commit()
     db.refresh(new_staff)
-    return new_staff
+
+    return {
+        "id": new_staff.id,
+        "tenant_id": new_staff.tenant_id,
+        "name": new_staff.name,
+        "email": new_staff.email,
+        "phone": new_staff.phone,
+        "role": new_staff.role,
+        "status": new_staff.status,
+        "designation": new_staff.designation,
+        "created_at": str(new_staff.created_at) if new_staff.created_at else None,
+        "enable_login": bool(req.enable_login)
+    }
 
 @app.patch("/api/staff/{staff_id}")
-def update_staff(staff_id: str, req: StaffUpdate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def update_staff(staff_id: str, req: StaffUpdate, context: dict = Depends(require_roles(["Owner", "Manager"])), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
     staff = db.query(Staff).filter(Staff.id == staff_id).first()
     if not staff:
-        raise HTTPException(404, "Staff not found")
+        raise HTTPException(404, "Staff member not found")
     
+    old_email = staff.email.strip().lower() if staff.email else None
+
     if req.name is not None: staff.name = req.name
-    if req.email is not None: staff.email = req.email
+    if req.email is not None: staff.email = req.email.strip().lower() if req.email else None
     if req.phone is not None: staff.phone = req.phone
     if req.role is not None: staff.role = req.role
     if req.status is not None: staff.status = req.status
     if req.designation is not None: staff.designation = req.designation
-    
+
+    target_email = staff.email.strip().lower() if staff.email else None
+
+    # Sync corresponding User record
+    existing_user = None
+    if old_email or target_email:
+        existing_user = db.query(User).filter(
+            User.tenant_id == context["tenant_id"],
+            func.lower(User.email).in_([e for e in [old_email, target_email] if e])
+        ).first()
+
+    if req.enable_login is True:
+        if not target_email:
+            raise HTTPException(status_code=400, detail="Work email address is required to enable portal login access.")
+        
+        # Check duplicate user
+        other_user = db.query(User).filter(
+            User.tenant_id == context["tenant_id"],
+            func.lower(User.email) == target_email,
+            User.id != (existing_user.id if existing_user else "")
+        ).first()
+
+        if other_user:
+            raise HTTPException(status_code=400, detail=f"Email address '{target_email}' is already registered for another user.")
+
+        if existing_user:
+            existing_user.email = target_email
+            existing_user.name = staff.name
+            existing_user.role = staff.role
+            existing_user.status = staff.status
+            if req.password:
+                if len(req.password.strip()) < 6:
+                    raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
+                existing_user.password = hash_password(req.password)
+        else:
+            if not req.password or len(req.password.strip()) < 6:
+                raise HTTPException(status_code=400, detail="Initial password (min 6 chars) is required when enabling portal login access.")
+            new_user = User(
+                id=f"user_{uuid.uuid4().hex[:8]}",
+                tenant_id=context["tenant_id"],
+                email=target_email,
+                name=staff.name,
+                role=staff.role,
+                status=staff.status,
+                password=hash_password(req.password)
+            )
+            db.add(new_user)
+            existing_user = new_user
+
+    elif req.enable_login is False:
+        if existing_user:
+            existing_user.status = "Inactive"
+
+    else: # enable_login is None (regular update)
+        if existing_user:
+            if target_email: existing_user.email = target_email
+            existing_user.name = staff.name
+            existing_user.role = staff.role
+            existing_user.status = staff.status
+            if req.password:
+                if len(req.password.strip()) < 6:
+                    raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
+                existing_user.password = hash_password(req.password)
+
     db.commit()
     db.refresh(staff)
-    return staff
+
+    is_enabled = bool(existing_user and existing_user.status == "Active")
+
+    return {
+        "id": staff.id,
+        "tenant_id": staff.tenant_id,
+        "name": staff.name,
+        "email": staff.email,
+        "phone": staff.phone,
+        "role": staff.role,
+        "status": staff.status,
+        "designation": staff.designation,
+        "created_at": str(staff.created_at) if staff.created_at else None,
+        "enable_login": is_enabled
+    }
 
 @app.delete("/api/staff/{staff_id}")
-def delete_staff(staff_id: str, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+def delete_staff(staff_id: str, context: dict = Depends(require_roles(["Owner", "Manager"])), db: Session = Depends(get_db)):
     set_rls_context(db, context["tenant_id"])
     staff = db.query(Staff).filter(Staff.id == staff_id).first()
     if not staff:
-        raise HTTPException(404, "Staff not found")
+        raise HTTPException(404, "Staff member not found")
+
+    if staff.email:
+        clean_email = staff.email.strip().lower()
+        user = db.query(User).filter(
+            User.tenant_id == context["tenant_id"],
+            func.lower(User.email) == clean_email
+        ).first()
+        if user:
+            db.delete(user)
+
     db.delete(staff)
     db.commit()
     return {"success": True}
@@ -1042,7 +1354,7 @@ async def get_settings(tenant_id: str, context: dict = Depends(get_user_context)
     return tenant
 
 @app.patch("/api/{tenant_id}/settings")
-async def update_settings(tenant_id: str, data: TenantUpdate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+async def update_settings(tenant_id: str, data: TenantUpdate, context: dict = Depends(require_roles(["Owner", "Manager"])), db: Session = Depends(get_db)):
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant: raise HTTPException(404, "Tenant not found")
     
@@ -1062,7 +1374,8 @@ async def get_admin_users(tenant_id: str, context: dict = Depends(get_user_conte
     return users
 
 @app.post("/api/{tenant_id}/admin-users")
-async def create_admin_user(tenant_id: str, data: AdminUserCreate, context: dict = Depends(get_user_context), db: Session = Depends(get_db)):
+async def create_admin_user(tenant_id: str, data: AdminUserCreate, context: dict = Depends(require_roles(["Owner", "Manager"])), db: Session = Depends(get_db)):
+
     new_user = User(
         id=f"user_{int(datetime.utcnow().timestamp())}",
         tenant_id=tenant_id,
@@ -1192,9 +1505,10 @@ async def get_expenses(
 async def create_expense(
     tenant_id: str,
     data: ExpenseCreate,
-    context: dict = Depends(get_user_context),
+    context: dict = Depends(require_roles(["Owner", "Manager", "Accountant"])),
     db: Session = Depends(get_db)
 ):
+
     set_rls_context(db, tenant_id)
     count = db.query(Expense).filter(Expense.tenant_id == tenant_id).count()
     expense_id = f"EXP-{101 + count}"
