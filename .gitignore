@@ -60,3 +60,4 @@ apps/api/uploads/*
 # Local binary archives and folders
 node-v20.zip
 node-v20.11.1-win-x64/
+*.db

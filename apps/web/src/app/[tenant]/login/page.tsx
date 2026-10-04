@@ -1,17 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { fetchTenantPublicMetadata, loginTenant, TenantPublicMetadata } from "@/lib/api";
-import { Eye, EyeOff, Lock, Mail, Hotel, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { fetchTenantPublicMetadata, loginTenant, resolveTenantId, TenantPublicMetadata } from "@/lib/api";
+import { Eye, EyeOff, Lock, Mail, Hotel, AlertCircle, Loader2, CheckCircle2, UserCheck } from "lucide-react";
 
-export default function TenantLoginPage() {
+function LoginForm() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const tenantId = (params?.tenant as string) || "hotelflora";
-  const redirectUrl = searchParams.get("redirect") || `/${tenantId}/admin`;
+  const urlTenantParam = params?.tenant as string;
+  const tenantId = resolveTenantId(urlTenantParam);
+
+  const rawRedirect = searchParams.get("redirect");
+  let redirectUrl = rawRedirect || `/${tenantId}/admin`;
+  if (redirectUrl.includes("/login")) {
+    redirectUrl = `/${tenantId}/admin`;
+  }
 
   const [tenantMeta, setTenantMeta] = useState<TenantPublicMetadata>({
     id: tenantId,
@@ -71,16 +77,22 @@ export default function TenantLoginPage() {
         localStorage.removeItem("remembered_email");
       }
 
-      setSuccessMsg("Authentication successful! Redirecting...");
+      setSuccessMsg("Authentication successful! Redirecting to portal...");
 
       setTimeout(() => {
         router.push(redirectUrl);
-      }, 600);
+      }, 500);
     } catch (err: any) {
       setErrorMsg(err.message || "Invalid email or password");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const setDemoAccount = (demoEmail: string, demoPass: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setErrorMsg(null);
   };
 
   useEffect(() => {
@@ -243,11 +255,48 @@ export default function TenantLoginPage() {
           </button>
         </form>
 
+        {/* Preset Quick Fill Demo Credentials */}
+        <div className="mt-6 pt-5 border-t border-slate-800/80">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Demo Quick Logins
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setDemoAccount("admin@hotelflora.com", "admin123")}
+              className="p-2 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-indigo-500/50 text-left text-slate-300 hover:text-white transition-all group"
+            >
+              <div className="font-semibold text-indigo-300 group-hover:text-indigo-200">Manager</div>
+              <div className="text-[10px] text-slate-400 truncate">admin@hotelflora.com</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDemoAccount("sarah@hotelflora.com", "password123")}
+              className="p-2 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-indigo-500/50 text-left text-slate-300 hover:text-white transition-all group"
+            >
+              <div className="font-semibold text-sky-300 group-hover:text-sky-200">Front Desk</div>
+              <div className="text-[10px] text-slate-400 truncate">sarah@hotelflora.com</div>
+            </button>
+          </div>
+        </div>
+
         {/* Footer info */}
-        <div className="mt-8 text-center text-xs text-slate-500">
+        <div className="mt-6 text-center text-[11px] text-slate-500">
           Restopia Hotel Management System &bull; Enterprise Auth
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TenantLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 text-slate-100">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
